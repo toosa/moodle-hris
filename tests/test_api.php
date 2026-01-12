@@ -18,37 +18,6 @@ class local_hris_external_test {
         return !empty($stored_key) && $apikey === $stored_key;
     }
     
-    public static function get_quiz_score($userid, $courseid, $type) {
-        global $DB;
-        
-        // Get customfield_field ID for jenis_quiz
-        $field = $DB->get_record('customfield_field', ['shortname' => 'jenis_quiz']);
-        if (!$field) {
-            return 0.00;
-        }
-
-        // Determine which value to look for (2 = PreTest, 3 = PostTest)
-        $fieldvalue = $type === 'pre' ? '2' : '3';
-        
-        $sql = "SELECT MAX(qa.sumgrades) as score
-                FROM {quiz_attempts} qa
-                JOIN {quiz} q ON qa.quiz = q.id
-                JOIN {customfield_data} cfd ON cfd.instanceid = q.id AND cfd.fieldid = :fieldid
-                WHERE qa.userid = :userid
-                AND q.course = :courseid
-                AND cfd.value = :fieldvalue
-                AND qa.state = 'finished'";
-        
-        $result = $DB->get_record_sql($sql, [
-            'userid' => $userid,
-            'courseid' => $courseid,
-            'fieldid' => $field->id,
-            'fieldvalue' => $fieldvalue
-        ]);
-        
-        return $result && $result->score ? round($result->score, 2) : 0.00;
-    }
-    
     public static function test_get_active_courses($apikey) {
         global $DB;
         
@@ -138,26 +107,56 @@ class local_hris_external_test {
             throw new Exception('Invalid API key');
         }
         
-        $sql = "SELECT DISTINCT u.id as user_id, u.email, u.firstname, u.lastname,
-                       COALESCE(uid.data, '') as company_name,
-                       c.id as course_id, c.shortname, c.fullname as course_name,
-                       cc.timecompleted,
-                       COALESCE(gg.finalgrade, 0) as final_grade
+        // Get quiz module ID
+        $quizmodule = $DB->get_record('modules', ['name' => 'quiz']);
+        if (!$quizmodule) {
+            return [];
+        }
+        
+        $sql = "SELECT
+                    u.id AS user_id,
+                    u.email AS email,
+                    u.firstname,
+                    u.lastname,
+                    COALESCE(uid.data, '') as company_name,
+                    c.id as course_id,
+                    c.shortname,
+                    c.fullname AS course_name,
+                    cc.timecompleted,
+                    ROUND(MAX(CASE WHEN mcd.value = '2' THEN gg.finalgrade END), 2) AS pretest_score,
+                    ROUND(MAX(CASE WHEN mcd.value = '3' THEN gg.finalgrade END), 2) AS posttest_score,
+                    ROUND(MAX(ggg.finalgrade), 2) as final_grade
                 FROM {user} u
-                JOIN {user_enrolments} ue ON u.id = ue.userid
-                JOIN {enrol} e ON ue.enrolid = e.id
-                JOIN {course} c ON e.courseid = c.id
-                LEFT JOIN {course_completions} cc ON u.id = cc.userid AND c.id = cc.course
-                LEFT JOIN {grade_items} gi ON c.id = gi.courseid AND gi.itemtype = 'course'
-                LEFT JOIN {grade_grades} gg ON u.id = gg.userid AND gi.id = gg.itemid
+                JOIN {user_enrolments} ue ON ue.userid = u.id
+                JOIN {enrol} e ON e.id = ue.enrolid
+                JOIN {course} c ON c.id = e.courseid
+                LEFT JOIN {course_modules} mcm ON mcm.course = c.id AND mcm.module = :moduleid
+                LEFT JOIN {customfield_data} mcd ON mcd.instanceid = mcm.id AND mcd.value IN ('2', '3')
+                LEFT JOIN {grade_items} gi ON gi.iteminstance = mcm.instance AND gi.itemmodule = 'quiz'
+                LEFT JOIN {grade_grades} gg ON gg.userid = u.id AND gg.itemid = gi.id
+                LEFT JOIN {grade_items} ggi ON ggi.courseid = c.id AND ggi.itemtype = 'course'
+                LEFT JOIN {grade_grades} ggg ON ggg.userid = u.id AND ggg.itemid = ggi.id
+                LEFT JOIN {course_completions} cc ON cc.userid = u.id AND cc.course = c.id
                 LEFT JOIN {user_info_field} uif ON uif.shortname = 'branch'
-                LEFT JOIN {user_info_data} uid ON u.id = uid.userid AND uid.fieldid = uif.id
-                WHERE u.deleted = 0 
+                LEFT JOIN {user_info_data} uid ON uid.userid = u.id AND uid.fieldid = uif.id
+                WHERE u.deleted = 0
                 AND u.confirmed = 1
                 AND c.id != :siteid
-                AND c.visible = 1";
+                AND c.visible = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM {role_assignments} ra
+                    JOIN {context} ctx ON ctx.id = ra.contextid
+                    WHERE ra.userid = u.id
+                    AND ctx.instanceid = c.id
+                    AND ctx.contextlevel = 50
+                    AND ra.roleid = 5
+                )";
         
-        $sqlparams = ['siteid' => SITEID];
+        $sqlparams = [
+            'moduleid' => $quizmodule->id,
+            'siteid' => SITEID
+        ];
         
         if ($courseid > 0) {
             $sql .= " AND c.id = :courseid";
@@ -169,15 +168,13 @@ class local_hris_external_test {
             $sqlparams['userid'] = $userid;
         }
         
-        $sql .= " ORDER BY c.fullname, u.lastname, u.firstname";
+        $sql .= " GROUP BY u.id, u.email, u.firstname, u.lastname, uid.data, c.id, c.shortname, c.fullname, cc.timecompleted
+                  ORDER BY c.fullname, u.lastname, u.firstname";
         
         $results = $DB->get_records_sql($sql, $sqlparams);
         
         $final_results = [];
         foreach ($results as $result) {
-            $pretest_score = self::get_quiz_score($result->user_id, $result->course_id, 'pre');
-            $posttest_score = self::get_quiz_score($result->user_id, $result->course_id, 'post');
-            
             $final_results[] = [
                 'user_id' => $result->user_id,
                 'email' => $result->email,
@@ -187,9 +184,9 @@ class local_hris_external_test {
                 'course_id' => $result->course_id,
                 'course_shortname' => $result->shortname,
                 'course_name' => $result->course_name,
-                'final_grade' => round($result->final_grade, 2),
-                'pretest_score' => $pretest_score,
-                'posttest_score' => $posttest_score,
+                'final_grade' => $result->final_grade ?: 0.00,
+                'pretest_score' => $result->pretest_score ?: 0.00,
+                'posttest_score' => $result->posttest_score ?: 0.00,
                 'completion_date' => $result->timecompleted ?: 0,
                 'is_completed' => $result->timecompleted ? 1 : 0
             ];
