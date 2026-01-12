@@ -150,7 +150,7 @@ class local_hris_external extends external_api {
                 JOIN {user_enrolments} ue ON u.id = ue.userid
                 JOIN {enrol} e ON ue.enrolid = e.id
                 JOIN {course} c ON e.courseid = c.id
-                LEFT JOIN {user_info_field} uif_company ON uif_company.shortname = 'company'
+                LEFT JOIN {user_info_field} uif_company ON uif_company.shortname = 'branch'
                 LEFT JOIN {user_info_data} uif_company ON u.id = uif_company.userid AND uif_company.fieldid = uif_company.id
                 WHERE u.deleted = 0 
                 AND u.confirmed = 1
@@ -257,7 +257,7 @@ class local_hris_external extends external_api {
                 LEFT JOIN {course_completions} cc ON u.id = cc.userid AND c.id = cc.course
                 LEFT JOIN {grade_items} gi ON c.id = gi.courseid AND gi.itemtype = 'course'
                 LEFT JOIN {grade_grades} gg ON u.id = gg.userid AND gi.id = gg.itemid
-                LEFT JOIN {user_info_field} uif_company ON uif_company.shortname = 'company'
+                LEFT JOIN {user_info_field} uif_company ON uif_company.shortname = 'branch'
                 LEFT JOIN {user_info_data} uif_company ON u.id = uif_company.userid AND uif_company.fieldid = uif_company.id
                 WHERE u.deleted = 0 
                 AND u.confirmed = 1
