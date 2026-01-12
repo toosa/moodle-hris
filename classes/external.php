@@ -331,7 +331,7 @@ class local_hris_external extends external_api {
     }
 
     /**
-     * Get quiz score based on name pattern (pre-test or post-test)
+     * Get quiz score based on custom field 'jenis_quiz'
      * @param int $userid User ID
      * @param int $courseid Course ID
      * @param string $type Type of quiz (pre or post)
@@ -340,21 +340,29 @@ class local_hris_external extends external_api {
     private static function get_quiz_score($userid, $courseid, $type) {
         global $DB;
 
-        // Search for quiz with name containing pre/post
-        $namepattern = $type === 'pre' ? '%pre%test%' : '%post%test%';
+        // Get customfield_field ID for jenis_quiz
+        $field = $DB->get_record('customfield_field', ['shortname' => 'jenis_quiz']);
+        if (!$field) {
+            return 0.00;
+        }
+
+        // Determine which value to look for (2 = PreTest, 3 = PostTest)
+        $fieldvalue = $type === 'pre' ? '2' : '3';
         
         $sql = "SELECT MAX(qa.sumgrades) as score
                 FROM {quiz_attempts} qa
                 JOIN {quiz} q ON qa.quiz = q.id
+                JOIN {customfield_data} cfd ON cfd.instanceid = q.id AND cfd.fieldid = :fieldid
                 WHERE qa.userid = :userid
                 AND q.course = :courseid
-                AND q.name ILIKE :namepattern
+                AND cfd.value = :fieldvalue
                 AND qa.state = 'finished'";
 
         $result = $DB->get_record_sql($sql, [
             'userid' => $userid,
             'courseid' => $courseid,
-            'namepattern' => $namepattern
+            'fieldid' => $field->id,
+            'fieldvalue' => $fieldvalue
         ]);
 
         return $result && $result->score ? round($result->score, 2) : 0.00;
