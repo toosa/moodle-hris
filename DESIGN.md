@@ -343,12 +343,12 @@ sequenceDiagram
     DB-->>API: Enrollment records
     
     loop For each enrollment
-        Note over API,DB: Get pre-test score
-        API->>DB: SELECT MAX(sumgrades)<br/>FROM quiz_attempts<br/>WHERE quiz name ILIKE '%pre%test%'<br/>AND state = 'finished'
+        Note over API,DB: Get pre-test score via custom field
+        API->>DB: SELECT MAX(gg.finalgrade)<br/>FROM course_modules cm<br/>JOIN customfield_data cfd<br/>WHERE cfd.value = '2' (PreTest)<br/>AND cm.course = courseid
         DB-->>API: pre_score
         
-        Note over API,DB: Get post-test score
-        API->>DB: SELECT MAX(sumgrades)<br/>FROM quiz_attempts<br/>WHERE quiz name ILIKE '%post%test%'<br/>AND state = 'finished'
+        Note over API,DB: Get post-test score via custom field
+        API->>DB: SELECT MAX(gg.finalgrade)<br/>FROM course_modules cm<br/>JOIN customfield_data cfd<br/>WHERE cfd.value = '3' (PostTest)<br/>AND cm.course = courseid
         DB-->>API: post_score
         
         API->>API: Build result object:<br/>- user info<br/>- course info<br/>- final_grade<br/>- pretest_score<br/>- posttest_score<br/>- completion_date<br/>- is_completed
@@ -496,7 +496,7 @@ SELECT DISTINCT
     u.email,
     u.firstname,
     u.lastname,
-    COALESCE(uid_company.data, '') as company_name,
+    COALESCE(uid_branch.data, '') as company_name,
     c.id as course_id,
     c.shortname,
     c.fullname as course_name,
@@ -505,11 +505,11 @@ FROM mdl_user u
 JOIN mdl_user_enrolments ue ON u.id = ue.userid
 JOIN mdl_enrol e ON ue.enrolid = e.id
 JOIN mdl_course c ON e.courseid = c.id
-LEFT JOIN mdl_user_info_field uif_company 
-    ON uif_company.shortname = 'company'
-LEFT JOIN mdl_user_info_data uid_company 
-    ON u.id = uid_company.userid 
-    AND uid_company.fieldid = uif_company.id
+LEFT JOIN mdl_user_info_field uif_branch 
+    ON uif_branch.shortname = 'branch'
+LEFT JOIN mdl_user_info_data uid_branch 
+    ON u.id = uid_branch.userid 
+    AND uid_branch.fieldid = uif_branch.id
 WHERE u.deleted = 0 
   AND u.confirmed = 1
   AND c.id != 1
@@ -525,7 +525,7 @@ SELECT DISTINCT
     u.email,
     u.firstname,
     u.lastname,
-    COALESCE(uid_company.data, '') as company_name,
+    COALESCE(uid_branch.data, '') as company_name,
     c.id as course_id,
     c.shortname,
     c.fullname as course_name,
@@ -544,11 +544,11 @@ LEFT JOIN mdl_grade_items gi
 LEFT JOIN mdl_grade_grades gg 
     ON u.id = gg.userid 
     AND gi.id = gg.itemid
-LEFT JOIN mdl_user_info_field uif_company 
-    ON uif_company.shortname = 'company'
-LEFT JOIN mdl_user_info_data uid_company 
-    ON u.id = uid_company.userid 
-    AND uid_company.fieldid = uif_company.id
+LEFT JOIN mdl_user_info_field uif_branch 
+    ON uif_branch.shortname = 'branch'
+LEFT JOIN mdl_user_info_data uid_branch 
+    ON u.id = uid_branch.userid 
+    AND uid_branch.fieldid = uif_branch.id
 WHERE u.deleted = 0 
   AND u.confirmed = 1
   AND c.id != 1
@@ -558,15 +558,22 @@ WHERE u.deleted = 0
 ORDER BY c.fullname, u.lastname, u.firstname;
 ```
 
-#### Query 4: Quiz Scores (Pre/Post Test)
+#### Query 4: Quiz Scores (Pre/Post Test) - Using Custom Fields
 ```sql
-SELECT MAX(qa.sumgrades) as score
-FROM mdl_quiz_attempts qa
-JOIN mdl_quiz q ON qa.quiz = q.id
-WHERE qa.userid = :userid
-  AND q.course = :courseid
-  AND q.name ILIKE :namepattern  -- '%pre%test%' or '%post%test%'
-  AND qa.state = 'finished';
+-- This query retrieves quiz scores using custom field values
+-- Custom field 'jenis_quiz' with values: 2=PreTest, 3=PostTest
+
+SELECT MAX(gg.finalgrade) as score
+FROM mdl_course_modules cm
+JOIN mdl_modules m ON m.id = cm.module AND m.name = 'quiz'
+JOIN mdl_customfield_data cfd ON cfd.instanceid = cm.id AND cfd.value = :fieldvalue
+JOIN mdl_grade_items gi ON gi.iteminstance = cm.instance AND gi.itemmodule = 'quiz'
+LEFT JOIN mdl_grade_grades gg ON gg.itemid = gi.id AND gg.userid = :userid
+WHERE cm.course = :courseid
+  AND cfd.value IN ('2', '3');  -- 2 for PreTest, 3 for PostTest
+
+-- Note: Custom field 'jenis_quiz' must be created and configured
+-- on course modules for this to work
 ```
 
 ---

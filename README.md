@@ -353,7 +353,7 @@ Get enrolled participants in courses.
 - `email`: User email address
 - `firstname`: User first name
 - `lastname`: User last name
-- `company_name`: Company/organization name (from user profile)
+- `company_name`: Branch/organization name (from user profile field `branch`)
 - `course_id`: Course ID
 - `course_shortname`: Course short name
 - `course_name`: Course full name
@@ -373,7 +373,7 @@ Comprehensive learning results with assessment scores.
 - `email`: User email address
 - `firstname`: User first name
 - `lastname`: User last name
-- `company_name`: Company/organization name
+- `company_name`: Branch/organization name (from custom field `branch`)
 - `course_id`: Course ID
 - `course_shortname`: Course short name
 - `course_name`: Course full name
@@ -421,12 +421,20 @@ Comprehensive learning results with assessment scores.
 
 -- User Custom Fields
 {user_info_field}
-└── shortname (e.g., 'company')
+├── id
+├── shortname (e.g., 'branch')
+└── name
 
 {user_info_data}
 ├── userid
 ├── fieldid
 └── data (field value)
+
+-- Course Module Custom Fields
+{customfield_data}
+├── instanceid (course_modules.id)
+├── fieldid
+└── value (1=Normal, 2=PreTest, 3=PostTest)
 
 -- Course Completion
 {course_completions}
@@ -461,23 +469,29 @@ Comprehensive learning results with assessment scores.
 ### Query Logic Explanation
 
 #### Pre/Post Test Detection
-The plugin automatically detects pre-test and post-test quizzes by:
+The plugin detects pre-test and post-test quizzes using custom field values on course modules:
+
+**Custom Field Configuration**:
+- Field name: `jenis_quiz`
+- Applied to: Course modules (quiz instances)
+- Values:
+  - `2` = PreTest
+  - `3` = PostTest
+  - `1` = Normal
+
+**Setup Instructions**:
+1. Create custom field on course modules with shortname `jenis_quiz`
+2. For each quiz, set the custom field value (2 for pre-test, 3 for post-test)
+3. Scores are retrieved from grade_grades table using the custom field as a filter
+
+**Detection Method**:
 ```sql
--- Pre-test: Quiz name contains "pre" AND "test"
-WHERE q.name ILIKE '%pre%test%'
+-- Pre-test: Custom field value = 2
+JOIN {customfield_data} cfd ON cfd.instanceid = cm.id AND cfd.value = '2'
 
--- Post-test: Quiz name contains "post" AND "test"
-WHERE q.name ILIKE '%post%test%'
+-- Post-test: Custom field value = 3
+JOIN {customfield_data} cfd ON cfd.instanceid = cm.id AND cfd.value = '3'
 ```
-
-Example quiz names that will be detected:
-- ✅ "Pre-Test Module 1"
-- ✅ "Pre Test Assessment"
-- ✅ "Module 1 - Pre-Test"
-- ✅ "Post-Test Final"
-- ✅ "Assessment Post Test"
-- ❌ "Pre Assessment" (missing "test")
-- ❌ "Final Test" (missing "pre" or "post")
 
 ## 🛠️ Installation
 

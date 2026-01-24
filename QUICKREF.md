@@ -1,6 +1,46 @@
 # HRIS Plugin - Quick Reference Guide
 
-## 🚀 Quick Start
+## � Prerequisites
+
+### ⚠️ Important: Custom Field Setup Required
+
+Before using score endpoints, configure custom fields for quiz type detection:
+
+**1. Create Custom Field** (One-time setup):
+```
+Site Admin > Plugins > Course modules > Quiz > Custom fields
+- Create field "jenis_quiz" (shortname)
+- Type: Dropdown/Select
+- Options:
+  * 1 = Normal
+  * 2 = PreTest
+  * 3 = PostTest
+```
+
+**2. Assign Field to Quizzes**:
+```
+For each course's quizzes:
+- Course Admin > Quiz
+- Find your quiz
+- Set custom field "jenis_quiz":
+  * Pre-test quizzes → 2
+  * Post-test quizzes → 3
+```
+
+**3. Verify Setup**:
+```sql
+-- Check if custom field exists
+SELECT COUNT(*) FROM mdl_customfield_field 
+WHERE shortname='jenis_quiz';
+
+-- Check if values are set (should see > 0)
+SELECT COUNT(*) FROM mdl_customfield_data 
+WHERE value IN ('2','3');
+```
+
+---
+
+## �🚀 Quick Start
 
 ### Installation (5 minutes)
 ```bash
@@ -168,9 +208,16 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
 **Cause**: User lacks permissions or service disabled  
 **Fix**: Enable service and check user capabilities
 
-### Empty Response
-**Cause**: No data matching query  
-**Fix**: Check filters, verify data exists in Moodle
+### Empty Response or Score = 0.00
+**Cause**: Custom field 'jenis_quiz' not configured  
+**Fix**: Follow setup in "Prerequisites" section above
+
+### Scores Not Updating
+**Cause**: Quiz custom field value not set properly  
+**Fix**: 
+- Verify field exists: `SELECT * FROM mdl_customfield_field WHERE shortname='jenis_quiz';`
+- Check quiz has value: `SELECT * FROM mdl_customfield_data WHERE instanceid=COURSE_MODULE_ID;`
+- Set to 2 (PreTest) or 3 (PostTest) as needed
 
 ---
 

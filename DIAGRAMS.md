@@ -183,16 +183,16 @@ sequenceDiagram
     
     alt courseid = 0
         Note over API: Get all participants from all courses
-        API->>DB: SELECT users FROM all courses<br/>JOIN user_enrolments<br/>JOIN enrol<br/>JOIN course<br/>LEFT JOIN user_info_data (company)
+        API->>DB: SELECT users FROM all courses<br/>JOIN user_enrolments<br/>JOIN enrol<br/>JOIN course<br/>LEFT JOIN user_info_data (branch)
     else courseid > 0
         Note over API: Get participants for specific course
-        API->>DB: SELECT users WHERE course_id = courseid<br/>JOIN user_enrolments<br/>JOIN enrol<br/>JOIN course<br/>LEFT JOIN user_info_data (company)
+        API->>DB: SELECT users WHERE course_id = courseid<br/>JOIN user_enrolments<br/>JOIN enrol<br/>JOIN course<br/>LEFT JOIN user_info_data (branch)
     end
     
     DB-->>API: Participant records
     
     loop For each participant
-        API->>API: Format data:<br/>- user_id<br/>- email<br/>- firstname, lastname<br/>- company_name<br/>- course info<br/>- enrollment_date
+        API->>API: Format data:<br/>- user_id<br/>- email<br/>- firstname, lastname<br/>- company_name (from branch)<br/>- course info<br/>- enrollment_date
     end
     
     API-->>Client: Array of participants (JSON)
@@ -262,12 +262,12 @@ sequenceDiagram
     DB-->>API: Enrollment records
     
     loop For each enrollment
-        Note over API,DB: Get pre-test score
-        API->>DB: SELECT MAX(sumgrades)<br/>FROM quiz_attempts<br/>WHERE quiz name ILIKE '%pre%test%'<br/>AND state = 'finished'
+        Note over API,DB: Get pre-test score via custom field (value=2)
+        API->>DB: SELECT MAX(gg.finalgrade)<br/>FROM mdl_course_modules cm<br/>JOIN mdl_customfield_data cfd<br/>WHERE cfd.value = '2' AND cm.course = courseid
         DB-->>API: pre_score
         
-        Note over API,DB: Get post-test score
-        API->>DB: SELECT MAX(sumgrades)<br/>FROM quiz_attempts<br/>WHERE quiz name ILIKE '%post%test%'<br/>AND state = 'finished'
+        Note over API,DB: Get post-test score via custom field (value=3)
+        API->>DB: SELECT MAX(gg.finalgrade)<br/>FROM mdl_course_modules cm<br/>JOIN mdl_customfield_data cfd<br/>WHERE cfd.value = '3' AND cm.course = courseid
         DB-->>API: post_score
         
         API->>API: Build result object:<br/>- user info<br/>- course info<br/>- final_grade<br/>- pretest_score<br/>- posttest_score<br/>- completion_date<br/>- is_completed

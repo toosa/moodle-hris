@@ -52,10 +52,34 @@ After (v1.1.0):
 ### Migration Notes
 
 If you have existing quizzes identified by naming patterns:
-1. Create the custom field `jenis_quiz`
-2. Manually set the field value for each quiz
-3. Pre-test quizzes → set to "PreTest" (value: 2)
-4. Post-test quizzes → set to "PostTest" (value: 3)
+1. Install custom field plugin (local_modcustomfields or equivalent)
+2. Create the custom field `jenis_quiz` on course modules:
+   - Type: Select/Dropdown
+   - Values: 1=Normal, 2=PreTest, 3=PostTest
+3. Manually set the field value for each quiz:
+   - Pre-test quizzes → set to "2" (PreTest)
+   - Post-test quizzes → set to "3" (PostTest)
+4. Verify with SQL:
+   ```sql
+   SELECT COUNT(*) FROM mdl_customfield_data 
+   WHERE fieldid = (SELECT id FROM mdl_customfield_field WHERE shortname='jenis_quiz')
+   AND value IN ('2','3');
+   ```
+
+### Troubleshooting Migration
+
+**Issue**: Pre/post test scores showing as 0.00 after upgrade
+**Solution**: 
+- Verify custom field exists: Check mdl_customfield_field table
+- Verify field values are set: Check mdl_customfield_data table
+- Re-run: `php admin/cli/upgrade.php --non-interactive`
+
+**Issue**: Custom field not appearing in quiz settings
+**Solution**:
+- Ensure plugin is enabled that creates custom fields
+- Go to: Site Admin > Plugins > Course modules > Quiz
+- Verify custom field 'jenis_quiz' is listed
+- If not visible, create manually via database
 
 ### API Changes
 No breaking changes. API endpoints remain the same:
