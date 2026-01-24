@@ -143,15 +143,15 @@ class local_hris_external extends external_api {
 
         // Build SQL based on course filter
         $sql = "SELECT DISTINCT u.id, u.email, u.firstname, u.lastname, 
-                       COALESCE(uid.data, '') as company_name,
+                       COALESCE(uif_company.data, '') as company_name,
                        c.id as course_id, c.shortname, c.fullname as course_name,
                        ue.timecreated as enrollment_date
                 FROM {user} u
                 JOIN {user_enrolments} ue ON u.id = ue.userid
                 JOIN {enrol} e ON ue.enrolid = e.id
                 JOIN {course} c ON e.courseid = c.id
-                LEFT JOIN {user_info_field} uif ON uif.shortname = 'branch'
-                LEFT JOIN {user_info_data} uid ON u.id = uid.userid AND uid.fieldid = uif.id
+                LEFT JOIN {user_info_field} uif_company ON uif_company.shortname = 'branch'
+                LEFT JOIN {user_info_data} uif_company ON u.id = uif_company.userid AND uif_company.fieldid = uif_company.id
                 WHERE u.deleted = 0 
                 AND u.confirmed = 1
                 AND c.id != :siteid
@@ -244,27 +244,57 @@ class local_hris_external extends external_api {
         $context = context_system::instance();
         self::validate_context($context);
 
-        // Base SQL for getting enrollments
-        $sql = "SELECT DISTINCT u.id as user_id, u.email, u.firstname, u.lastname,
-                       COALESCE(uid.data, '') as company_name,
-                       c.id as course_id, c.shortname, c.fullname as course_name,
-                       cc.timecompleted,
-                       COALESCE(gg.finalgrade, 0) as final_grade
+        // Get quiz module ID
+        $quizmodule = $DB->get_record('modules', ['name' => 'quiz']);
+        if (!$quizmodule) {
+            return [];
+        }
+
+        // Build SQL based on filters
+        $sql = "SELECT
+                    u.id AS user_id,
+                    u.email AS email,
+                    u.firstname,
+                    u.lastname,
+                    COALESCE(uid.data, '') as company_name,
+                    c.id as course_id,
+                    c.shortname,
+                    c.fullname AS course_name,
+                    cc.timecompleted,
+                    ROUND(MAX(CASE WHEN mcd.value = '2' THEN gg.finalgrade END), 2) AS pretest_score,
+                    ROUND(MAX(CASE WHEN mcd.value = '3' THEN gg.finalgrade END), 2) AS posttest_score,
+                    ROUND(MAX(ggg.finalgrade), 2) as final_grade
                 FROM {user} u
-                JOIN {user_enrolments} ue ON u.id = ue.userid
-                JOIN {enrol} e ON ue.enrolid = e.id
-                JOIN {course} c ON e.courseid = c.id
-                LEFT JOIN {course_completions} cc ON u.id = cc.userid AND c.id = cc.course
-                LEFT JOIN {grade_items} gi ON c.id = gi.courseid AND gi.itemtype = 'course'
-                LEFT JOIN {grade_grades} gg ON u.id = gg.userid AND gi.id = gg.itemid
+                JOIN {user_enrolments} ue ON ue.userid = u.id
+                JOIN {enrol} e ON e.id = ue.enrolid
+                JOIN {course} c ON c.id = e.courseid
+                LEFT JOIN {course_modules} mcm ON mcm.course = c.id AND mcm.module = :moduleid
+                LEFT JOIN {customfield_data} mcd ON mcd.instanceid = mcm.id AND mcd.value IN ('2', '3')
+                LEFT JOIN {grade_items} gi ON gi.iteminstance = mcm.instance AND gi.itemmodule = 'quiz'
+                LEFT JOIN {grade_grades} gg ON gg.userid = u.id AND gg.itemid = gi.id
+                LEFT JOIN {grade_items} ggi ON ggi.courseid = c.id AND ggi.itemtype = 'course'
+                LEFT JOIN {grade_grades} ggg ON ggg.userid = u.id AND ggg.itemid = ggi.id
+                LEFT JOIN {course_completions} cc ON cc.userid = u.id AND cc.course = c.id
                 LEFT JOIN {user_info_field} uif ON uif.shortname = 'branch'
-                LEFT JOIN {user_info_data} uid ON u.id = uid.userid AND uid.fieldid = uif.id
-                WHERE u.deleted = 0 
+                LEFT JOIN {user_info_data} uid ON uid.userid = u.id AND uid.fieldid = uif.id
+                WHERE u.deleted = 0
                 AND u.confirmed = 1
                 AND c.id != :siteid
-                AND c.visible = 1";
+                AND c.visible = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM {role_assignments} ra
+                    JOIN {context} ctx ON ctx.id = ra.contextid
+                    WHERE ra.userid = u.id
+                    AND ctx.instanceid = c.id
+                    AND ctx.contextlevel = 50
+                    AND ra.roleid = 5
+                )";
 
-        $sqlparams = ['siteid' => SITEID];
+        $sqlparams = [
+            'moduleid' => $quizmodule->id,
+            'siteid' => SITEID
+        ];
 
         if ($params['courseid'] > 0) {
             $sql .= " AND c.id = :courseid";
@@ -276,16 +306,13 @@ class local_hris_external extends external_api {
             $sqlparams['userid'] = $params['userid'];
         }
 
-        $sql .= " ORDER BY c.fullname, u.lastname, u.firstname";
+        $sql .= " GROUP BY u.id, u.email, u.firstname, u.lastname, uid.data, c.id, c.shortname, c.fullname, cc.timecompleted
+                  ORDER BY c.fullname, u.lastname, u.firstname";
 
         $results = $DB->get_records_sql($sql, $sqlparams);
 
         $final_results = [];
         foreach ($results as $result) {
-            // Get pre-test and post-test scores
-            $pretest_score = self::get_quiz_score($result->user_id, $result->course_id, 'pre');
-            $posttest_score = self::get_quiz_score($result->user_id, $result->course_id, 'post');
-
             $final_results[] = [
                 'user_id' => $result->user_id,
                 'email' => $result->email,
@@ -295,9 +322,9 @@ class local_hris_external extends external_api {
                 'course_id' => $result->course_id,
                 'course_shortname' => $result->shortname,
                 'course_name' => $result->course_name,
-                'final_grade' => round($result->final_grade, 2),
-                'pretest_score' => $pretest_score,
-                'posttest_score' => $posttest_score,
+                'final_grade' => $result->final_grade ?: 0.00,
+                'pretest_score' => $result->pretest_score ?: 0.00,
+                'posttest_score' => $result->posttest_score ?: 0.00,
                 'completion_date' => $result->timecompleted ?: 0,
                 'is_completed' => $result->timecompleted ? 1 : 0
             ];
@@ -328,36 +355,6 @@ class local_hris_external extends external_api {
                 'is_completed' => new external_value(PARAM_INT, 'Is course completed')
             ])
         );
-    }
-
-    /**
-     * Get quiz score based on custom field 'jenis_quiz'
-     * @param int $userid User ID
-     * @param int $courseid Course ID
-     * @param string $type Type of quiz (pre or post)
-     * @return float Quiz score
-     */
-    private static function get_quiz_score($userid, $courseid, $type) {
-        global $DB;
-
-        // Determine which value to look for (2 = PreTest, 3 = PostTest)
-        $fieldvalue = $type === 'pre' ? '2' : '3';
-        
-        $sql = "SELECT MAX(gg.finalgrade) as score
-                FROM {course_modules} cm
-                JOIN {modules} m ON m.id = cm.module AND m.name = 'quiz'
-                JOIN {customfield_data} cfd ON cfd.instanceid = cm.id AND cfd.value = :fieldvalue
-                JOIN {grade_items} gi ON gi.iteminstance = cm.instance AND gi.itemmodule = 'quiz'
-                LEFT JOIN {grade_grades} gg ON gg.itemid = gi.id AND gg.userid = :userid
-                WHERE cm.course = :courseid";
-
-        $result = $DB->get_record_sql($sql, [
-            'userid' => $userid,
-            'courseid' => $courseid,
-            'fieldvalue' => $fieldvalue
-        ]);
-
-        return $result && $result->score ? round($result->score, 2) : 0.00;
     }
 
     /**
