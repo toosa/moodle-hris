@@ -52,6 +52,15 @@ $functions = [
         'type'        => 'read',
         'ajax'        => true,
         'capabilities' => '',
+    ],
+    'local_hris_get_all_course_results' => [
+        'classname'   => 'local_hris_external',
+        'methodname'  => 'get_all_course_results',
+        'classpath'   => 'local/hris/classes/external.php',
+        'description' => 'Get all course results with questionnaire scores',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => '',
     ]
 ];
 
@@ -61,7 +70,8 @@ $services = [
         'functions' => [
             'local_hris_get_active_courses',
             'local_hris_get_course_participants',
-            'local_hris_get_course_results'
+            'local_hris_get_course_results',
+            'local_hris_get_all_course_results'
         ],
         'restrictedusers' => 0,
         'enabled' => 1,

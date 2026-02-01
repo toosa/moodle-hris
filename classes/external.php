@@ -563,6 +563,16 @@ class local_hris_external extends external_api {
         return !empty($stored_key) && $apikey === $stored_key;
     }
     
+    /**
+     * Returns description of method parameters for get_all_course_results
+     * @return external_function_parameters
+     */
+    public static function get_all_course_results_parameters() {
+        return new external_function_parameters([
+            'apikey' => new external_value(PARAM_TEXT, 'API key for authentication'),
+            'format' => new external_value(PARAM_TEXT, 'Response format', VALUE_DEFAULT, 'json')
+        ]);
+    }
 
     /**
      * Public endpoint: Get aggregated questionnaire scores for all courses
