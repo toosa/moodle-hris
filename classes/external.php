@@ -361,6 +361,169 @@ class local_hris_external extends external_api {
     }
 
     /**
+     * Get questionnaire scores for a user in a course
+     * 
+     * Looks for a Rate question in the questionnaire with exactly 9 choices.
+     * Each choice is rated by user on a scale (typically 1-5).
+     * 
+     * If Rate question has exactly 9 choices and responses exist:
+     *   - score_materi = average of choices 1-3
+     *   - score_trainer = average of choices 4-6
+     *   - score_tempat = average of choices 7-9
+     *   - score_total = average of all 9 choices
+     *   - questionnaire_available = 1
+     *
+     * If Rate question exists but doesn't have exactly 9 choices:
+     *   - Returns only score_total (average of all choices)
+     *   - questionnaire_available = 0
+     *   - Other scores = 0
+     *
+     * If no questionnaire, no Rate question, or no responses:
+     *   - Returns all scores as 0
+     *   - questionnaire_available = 0
+     *
+     * @param int $userid User ID
+     * @param int $courseid Course ID
+     * @return array Array with questionnaire_available, score_materi, score_trainer, score_tempat, score_total
+     */
+    private static function get_questionnaire_scores($userid, $courseid) {
+        global $DB;
+
+        // Default response
+        $default_response = [
+            'questionnaire_available' => 0,
+            'score_materi' => 0.00,
+            'score_trainer' => 0.00,
+            'score_tempat' => 0.00,
+            'score_total' => 0.00
+        ];
+
+        try {
+            // Step 1: Check if questionnaire module exists in the course
+            $questionnaire = $DB->get_record_sql(
+                "SELECT cm.id, q.id as questionnaire_id
+                 FROM {course_modules} cm
+                 JOIN {modules} m ON m.id = cm.module AND m.name = 'questionnaire'
+                 JOIN {questionnaire} q ON q.id = cm.instance
+                 WHERE cm.course = ? AND cm.visible = 1",
+                [$courseid]
+            );
+
+            if (!$questionnaire) {
+                return $default_response;
+            }
+
+            // Step 2: Find the Rate question (type_id = 8 for QUESRATE) in this questionnaire
+            $rate_question = $DB->get_record('questionnaire_question', [
+                'surveyid' => $questionnaire->questionnaire_id,
+                'type_id' => 8  // QUESRATE = 8
+            ]);
+
+            if (!$rate_question) {
+                return $default_response;
+            }
+
+            // Step 3: Count choices for this Rate question
+            $choice_count = $DB->count_records('questionnaire_quest_choice', [
+                'question_id' => $rate_question->id
+            ]);
+
+            // Step 4: Get response record for this user
+            $response_record = $DB->get_record('questionnaire_response', [
+                'questionnaireid' => $questionnaire->questionnaire_id,
+                'userid' => $userid
+            ]);
+
+            if (!$response_record) {
+                return $default_response;
+            }
+
+            // Step 5: Get all rating responses for the Rate question
+            // Rate question responses are stored in questionnaire_response_rank table
+            // Order by choice_id to maintain consistent order (choice 1, 2, 3, ...)
+            $sql = "SELECT qrr.id, qrr.response_id, qrr.question_id, qrr.choice_id, qrr.rankvalue,
+                           qqc.id as choice_id_in_table
+                    FROM {questionnaire_response_rank} qrr
+                    JOIN {questionnaire_quest_choice} qqc ON qqc.id = qrr.choice_id
+                    WHERE qrr.response_id = ? AND qrr.question_id = ?
+                    ORDER BY qqc.id ASC";
+
+            $responses = $DB->get_records_sql($sql, [$response_record->id, $rate_question->id]);
+
+            if (empty($responses)) {
+                return $default_response;
+            }
+
+            // Step 6: Extract rankvalues (scores) in order
+            // Ensure we have exactly the number of responses matching choice count
+            $response_values = [];
+            foreach ($responses as $response) {
+                $rankvalue = (float) $response->rankvalue;
+                // Include all rankvalues (even 0) to maintain position
+                $response_values[] = $rankvalue;
+            }
+
+
+            // Validate we got all responses
+            $score_total = round(
+                array_sum($response_values) / count($response_values),
+                2
+            );
+
+            if (count($response_values) !== $choice_count) {
+                // Mismatch between choices and responses - return only total score
+                $has_score = $score_total > 0;
+                return [
+                    'questionnaire_available' => $has_score ? 1 : 0,
+                    'score_materi' => 0.00,
+                    'score_trainer' => 0.00,
+                    'score_tempat' => 0.00,
+                    'score_total' => $score_total
+                ];
+            }
+
+            // Step 8: Check if exactly 9 choices for breakdown scores
+            if ($choice_count === 9) {
+                $score_materi = round(
+                    ($response_values[0] + $response_values[1] + $response_values[2]) / 3,
+                    2
+                );
+                $score_trainer = round(
+                    ($response_values[3] + $response_values[4] + $response_values[5]) / 3,
+                    2
+                );
+                $score_tempat = round(
+                    ($response_values[6] + $response_values[7] + $response_values[8]) / 3,
+                    2
+                );
+                $has_score = ($score_materi > 0 || $score_trainer > 0 || $score_tempat > 0 || $score_total > 0);
+                return [
+                    'questionnaire_available' => $has_score ? 1 : 0,
+                    'score_materi' => $score_materi,
+                    'score_trainer' => $score_trainer,
+                    'score_tempat' => $score_tempat,
+                    'score_total' => $score_total
+                ];
+            }
+
+            // Not exactly 9 choices - return only score_total
+            $has_score = $score_total > 0;
+            return [
+                'questionnaire_available' => $has_score ? 1 : 0,
+                'score_materi' => 0.00,
+                'score_trainer' => 0.00,
+                'score_tempat' => 0.00,
+                'score_total' => $score_total
+            ];
+
+        } catch (Exception $e) {
+            // Log error for debugging but return safe default
+            error_log("Questionnaire error for user {$userid}, course {$courseid}: " . $e->getMessage());
+            return $default_response;
+        }
+    }
+
+    /**
      * Validate API key
      * @param string $apikey API key to validate
      * @return bool True if valid, false otherwise
