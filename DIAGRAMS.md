@@ -7,8 +7,10 @@ This document contains all sequence diagrams for the HRIS Integration Plugin in 
 2. [Get Active Courses Flow](#2-get-active-courses-flow)
 3. [Get Course Participants Flow](#3-get-course-participants-flow)
 4. [Get Course Results Flow](#4-get-course-results-flow)
-5. [Authentication Flow](#5-authentication-flow)
-6. [Error Handling Flow](#6-error-handling-flow)
+5. [Get All Course Results Flow (with Questionnaire)](#5-get-all-course-results-flow-with-questionnaire)
+6. [Questionnaire Scoring Flow](#6-questionnaire-scoring-flow)
+7. [Authentication Flow](#7-authentication-flow)
+8. [Error Handling Flow](#8-error-handling-flow)
 
 ---
 
@@ -278,7 +280,245 @@ sequenceDiagram
 
 ---
 
-## 5. Authentication Flow
+## 5. Get All Course Results Flow (with Questionnaire)
+
+```mermaid
+sequenceDiagram
+    participant HRIS as HRIS System
+    participant WS as Moodle Web Service
+    participant API as local_hris_external
+    participant DB as Moodle Database
+    
+    HRIS->>WS: POST /webservice/rest/server.php
+    Note over HRIS,WS: wstoken + apikey + wsfunction + format
+    
+    WS->>API: get_all_course_results(apikey, format)
+    
+    API->>API: validate_parameters()
+    API->>API: validate_api_key(apikey)
+    
+    alt API Key Invalid
+        API-->>HRIS: Error: Invalid API Key
+    else API Key Valid
+        API->>API: validate_context(system)
+        
+        API->>DB: SELECT all enrollments with grades
+        DB-->>API: All enrollment records
+        
+        loop For each enrollment
+            API->>DB: get_quiz_score(userid, courseid, 'pre')
+            DB-->>API: Pre-test score
+            
+            API->>DB: get_quiz_score(userid, courseid, 'post')
+            DB-->>API: Post-test score
+            
+            API->>DB: get_questionnaire_scores(userid, courseid)
+            Note over API,DB: Complex questionnaire analysis
+            DB-->>API: Questionnaire scores object
+            
+            API->>API: Merge all data:<br/>- User & course info<br/>- Grades & completion<br/>- Test scores<br/>- Questionnaire scores
+        end
+        
+        API-->>WS: Array of comprehensive results
+        WS-->>HRIS: JSON Response with all metrics
+    end
+```
+
+### Detailed Flow with All Metrics
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as local_hris_external
+    participant Helper as Helper Methods
+    participant DB as Database
+    
+    Client->>API: get_all_course_results(apikey, format='json')
+    
+    API->>API: Validate parameters & API key & context
+    
+    API->>DB: SELECT u.id, u.email, u.firstname, u.lastname,<br/>c.id, c.shortname, c.fullname,<br/>cc.timecompleted, gg.finalgrade<br/>FROM users JOIN enrollments JOIN courses<br/>LEFT JOIN completions, grades, user_info
+    
+    DB-->>API: All enrollment records
+    
+    loop For each (user, course) pair
+        Note over API,Helper: Calculate Pre-test Score
+        API->>Helper: get_quiz_score(userid, courseid, 'pre')
+        Helper->>DB: SELECT MAX(finalgrade)<br/>WHERE custom_field.value = '2'
+        DB-->>Helper: pretest_score
+        Helper-->>API: pretest_score (0.00 if none)
+        
+        Note over API,Helper: Calculate Post-test Score
+        API->>Helper: get_quiz_score(userid, courseid, 'post')
+        Helper->>DB: SELECT MAX(finalgrade)<br/>WHERE custom_field.value = '3'
+        DB-->>Helper: posttest_score
+        Helper-->>API: posttest_score (0.00 if none)
+        
+        Note over API,Helper: Calculate Questionnaire Scores
+        API->>Helper: get_questionnaire_scores(userid, courseid)
+        Helper->>Helper: See Questionnaire Scoring Flow (Section 6)
+        Helper-->>API: {
+            questionnaire_available,
+            score_materi,
+            score_trainer,
+            score_tempat,
+            score_total
+        }
+        
+        API->>API: Merge into result object:
+        Note over API: course_id, course_name, course_shortname,<br/>user_id, firstname, lastname, email,<br/>company_name, final_grade,<br/>pretest_score, posttest_score,<br/>completion_date, is_completed,<br/>questionnaire_available,<br/>score_materi, score_trainer,<br/>score_tempat, score_total
+    end
+    
+    API-->>Client: Array of comprehensive results (JSON)
+```
+
+---
+
+## 6. Questionnaire Scoring Flow
+
+### Complete Questionnaire Analysis Process
+
+```mermaid
+sequenceDiagram
+    participant API as get_questionnaire_scores()
+    participant DB as Database
+    
+    Note over API: Initialize default response:<br/>all scores = 0, available = 0
+    
+    API->>DB: Find questionnaire module
+    Note over DB: SELECT cm.id, q.id<br/>FROM course_modules cm<br/>JOIN modules m (name='questionnaire')<br/>JOIN questionnaire q<br/>WHERE course = courseid AND visible = 1
+    
+    alt No questionnaire found
+        DB-->>API: NULL
+        API-->>API: Return default (all zeros)
+    else Questionnaire exists
+        DB-->>API: questionnaire_id
+        
+        API->>DB: Find Rate question (type_id=8)
+        Note over DB: SELECT * FROM questionnaire_question<br/>WHERE surveyid = questionnaire_id<br/>AND type_id = 8 (QUESRATE)
+        
+        alt No Rate question
+            DB-->>API: NULL
+            API-->>API: Return default (all zeros)
+        else Rate question found
+            DB-->>API: rate_question_id
+            
+            API->>DB: Count choices
+            Note over DB: SELECT COUNT(*)<br/>FROM questionnaire_quest_choice<br/>WHERE question_id = rate_question_id
+            DB-->>API: choice_count
+            
+            API->>DB: Get user's response
+            Note over DB: SELECT * FROM questionnaire_response<br/>WHERE questionnaireid = questionnaire_id<br/>AND userid = userid
+            
+            alt No response from user
+                DB-->>API: NULL
+                API-->>API: Return default (all zeros)
+            else Response exists
+                DB-->>API: response_id
+                
+                API->>DB: Get all rating values
+                Note over DB: SELECT qrr.rankvalue<br/>FROM questionnaire_response_rank qrr<br/>JOIN questionnaire_quest_choice qqc<br/>WHERE response_id = response_id<br/>AND question_id = rate_question_id<br/>ORDER BY qqc.id ASC
+                
+                DB-->>API: Array of rankvalues [v1, v2, ..., vN]
+                
+                alt Empty responses
+                    API-->>API: Return default (all zeros)
+                else Has responses
+                    API->>API: Calculate score_total = average(all values)
+                    
+                    alt Response count != choice count
+                        Note over API: Mismatch detected
+                        API-->>API: Return {
+                            questionnaire_available: 1 if total > 0,
+                            score_materi: 0,
+                            score_trainer: 0,
+                            score_tempat: 0,
+                            score_total: calculated
+                        }
+                    else choice_count == 9
+                        Note over API: Perfect match with 9 choices
+                        API->>API: score_materi = avg(v1, v2, v3)
+                        API->>API: score_trainer = avg(v4, v5, v6)
+                        API->>API: score_tempat = avg(v7, v8, v9)
+                        API-->>API: Return {
+                            questionnaire_available: 1,
+                            score_materi: calculated,
+                            score_trainer: calculated,
+                            score_tempat: calculated,
+                            score_total: calculated
+                        }
+                    else Other choice count
+                        Note over API: Valid but not 9 choices
+                        API-->>API: Return {
+                            questionnaire_available: 1 if total > 0,
+                            score_materi: 0,
+                            score_trainer: 0,
+                            score_tempat: 0,
+                            score_total: calculated
+                        }
+                    end
+                end
+            end
+        end
+    end
+```
+
+### Questionnaire Scoring Decision Tree
+
+```mermaid
+flowchart TD
+    Start([get_questionnaire_scores<br/>userid, courseid]) --> FindQ[Find Questionnaire Module]
+    
+    FindQ --> HasQ{Questionnaire<br/>Exists?}
+    HasQ -->|No| ReturnZero1[Return all zeros<br/>available=0]
+    HasQ -->|Yes| FindRate[Find Rate Question<br/>type_id=8]
+    
+    FindRate --> HasRate{Rate Question<br/>Found?}
+    HasRate -->|No| ReturnZero2[Return all zeros<br/>available=0]
+    HasRate -->|Yes| CountChoice[Count Choices]
+    
+    CountChoice --> GetResp[Get User Response]
+    
+    GetResp --> HasResp{User has<br/>Response?}
+    HasResp -->|No| ReturnZero3[Return all zeros<br/>available=0]
+    HasResp -->|Yes| GetRank[Get All Rank Values<br/>Ordered by choice_id]
+    
+    GetRank --> HasRank{Has Rank<br/>Values?}
+    HasRank -->|No| ReturnZero4[Return all zeros<br/>available=0]
+    HasRank -->|Yes| CalcTotal[Calculate score_total<br/>= average of all values]
+    
+    CalcTotal --> CheckMatch{Response count<br/>== Choice count?}
+    CheckMatch -->|No| ReturnTotal1[Return:<br/>available=1 if total>0<br/>only score_total<br/>others=0]
+    
+    CheckMatch -->|Yes| Check9{Choice count<br/>== 9?}
+    Check9 -->|No| ReturnTotal2[Return:<br/>available=1 if total>0<br/>only score_total<br/>others=0]
+    
+    Check9 -->|Yes| CalcBreakdown[Calculate breakdown:<br/>materi = avg v1-v3<br/>trainer = avg v4-v6<br/>tempat = avg v7-v9]
+    
+    CalcBreakdown --> ReturnAll[Return:<br/>available=1<br/>All 4 scores<br/>with breakdown]
+    
+    ReturnZero1 --> End([Return to caller])
+    ReturnZero2 --> End
+    ReturnZero3 --> End
+    ReturnZero4 --> End
+    ReturnTotal1 --> End
+    ReturnTotal2 --> End
+    ReturnAll --> End
+    
+    style Start fill:#e1f5ff
+    style End fill:#e1f5ff
+    style ReturnAll fill:#c8e6c9
+    style ReturnTotal1 fill:#fff9c4
+    style ReturnTotal2 fill:#fff9c4
+    style ReturnZero1 fill:#ffcdd2
+    style ReturnZero2 fill:#ffcdd2
+    style ReturnZero3 fill:#ffcdd2
+    style ReturnZero4 fill:#ffcdd2
+```
+
+---
+
+## 7. Authentication Flow
 
 ```mermaid
 sequenceDiagram
@@ -347,7 +587,7 @@ sequenceDiagram
 
 ---
 
-## 6. Error Handling Flow
+## 8. Error Handling Flow
 
 ```mermaid
 sequenceDiagram
@@ -462,6 +702,19 @@ These diagrams are referenced in:
 
 ---
 
-**Last Updated**: 2025-01-05  
-**Version**: 1.0  
+**Last Updated**: 2026-02-01  
+**Version**: 1.1  
 **Author**: Prihantoosa
+
+## Changelog
+
+### Version 1.1 (2026-02-01)
+- Added Get All Course Results Flow with questionnaire integration
+- Added comprehensive Questionnaire Scoring Flow with decision tree
+- Added detailed sequence diagrams for questionnaire analysis
+- Added flowchart for questionnaire scoring logic
+- Updated all section numbering
+
+### Version 1.0 (2025-01-05)
+- Initial release with basic API flows
+- Authentication and error handling diagrams
