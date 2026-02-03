@@ -541,9 +541,7 @@ class local_hris_external extends external_api {
         return new external_function_parameters([
             'apikey' => new external_value(PARAM_TEXT, 'API key for authentication'),
             'courseid' => new external_value(PARAM_INT, 'Course ID', VALUE_OPTIONAL, 0),
-            'userid' => new external_value(PARAM_INT, 'User ID', VALUE_OPTIONAL, 0),
-            'company_name' => new external_value(PARAM_TEXT, 'Company name', VALUE_OPTIONAL, ''),
-            'format' => new external_value(PARAM_TEXT, 'Response format', VALUE_DEFAULT, 'json')
+            'company_name' => new external_value(PARAM_TEXT, 'Company name', VALUE_OPTIONAL, '')
         ]);
     }
 
@@ -551,20 +549,16 @@ class local_hris_external extends external_api {
      * Public endpoint: Get aggregated questionnaire scores for all courses
      * @param string $apikey API key
      * @param int $courseid Course ID (0 for all courses)
-     * @param int $userid User ID (0 for all users)
      * @param string $company_name Company name filter (empty for all)
-     * @param string $format Response format (json)
      * @return array Aggregated results
      */
-    public static function get_all_course_results($apikey, $courseid = 0, $userid = 0, $company_name = '', $format = 'json') {
+    public static function get_all_course_results($apikey, $courseid = 0, $company_name = '') {
         global $DB;
 
         $params = self::validate_parameters(self::get_all_course_results_parameters(), [
             'apikey' => $apikey,
             'courseid' => $courseid,
-            'userid' => $userid,
-            'company_name' => $company_name,
-            'format' => $format
+            'company_name' => $company_name
         ]);
 
         if (!self::validate_api_key($params['apikey'])) {
@@ -575,7 +569,7 @@ class local_hris_external extends external_api {
         self::validate_context($context);
 
         // Get all enrollments with grades and completion data with optional filters
-        $sql = "SELECT DISTINCT u.id as user_id, u.email, u.firstname, u.lastname,
+        $sql = "SELECT u.id as user_id, u.email, u.firstname, u.lastname,
                        COALESCE(uid.data, '') as company_name,
                        c.id as course_id, c.shortname, c.fullname as course_name,
                        cc.timecompleted,
@@ -599,11 +593,6 @@ class local_hris_external extends external_api {
         if ($params['courseid'] > 0) {
             $sql .= " AND c.id = :courseid";
             $sqlparams['courseid'] = $params['courseid'];
-        }
-
-        if ($params['userid'] > 0) {
-            $sql .= " AND u.id = :userid";
-            $sqlparams['userid'] = $params['userid'];
         }
 
         if (!empty($params['company_name'])) {
