@@ -331,36 +331,6 @@ class local_hris_external extends external_api {
     }
 
     /**
-     * Returns description of method result value for all course results
-     * @return external_description
-     */
-    public static function get_all_course_results_returns() {
-        return new external_multiple_structure(
-            new external_single_structure([
-                'course_id' => new external_value(PARAM_INT, 'Course ID'),
-                'course_name' => new external_value(PARAM_TEXT, 'Course name'),
-                'course_shortname' => new external_value(PARAM_TEXT, 'Course short name'),
-                'user_id' => new external_value(PARAM_INT, 'User ID'),
-                'firstname' => new external_value(PARAM_TEXT, 'User first name'),
-                'lastname' => new external_value(PARAM_TEXT, 'User last name'),
-                'email' => new external_value(PARAM_TEXT, 'User email'),
-                'company_name' => new external_value(PARAM_TEXT, 'Company name'),
-                'final_grade' => new external_value(PARAM_FLOAT, 'Final grade'),
-                'pretest_score' => new external_value(PARAM_FLOAT, 'Pre-test score'),
-                'posttest_score' => new external_value(PARAM_FLOAT, 'Post-test score'),
-                'completion_date' => new external_value(PARAM_INT, 'Course completion date'),
-                'is_completed' => new external_value(PARAM_INT, 'Is course completed'),
-                'questionnaire_available' => new external_value(PARAM_INT, 'Questionnaire available (1) or not (0)'),
-                'score_materi' => new external_value(PARAM_FLOAT, 'Average score of questions 1-3 (Material)'),
-                'score_trainer' => new external_value(PARAM_FLOAT, 'Average score of questions 4-6 (Trainer)'),
-                'score_tempat' => new external_value(PARAM_FLOAT, 'Average score of questions 7-9 (Venue)'),
-                'score_total' => new external_value(PARAM_FLOAT, 'Overall average score')
-            ])
-        );
-    }
-
-
-    /**
      * Get quiz score based on custom field 'jenis_quiz'
      * @param int $userid User ID
      * @param int $courseid Course ID
@@ -677,6 +647,35 @@ class local_hris_external extends external_api {
         }
 
         return $result;
+    }
+
+    /**
+     * Returns description of method result value for all course results
+     * @return external_description
+     */
+    public static function get_all_course_results_returns() {
+        return new external_multiple_structure(
+            new external_single_structure([
+                'course_id' => new external_value(PARAM_INT, 'Course ID'),
+                'course_name' => new external_value(PARAM_TEXT, 'Course name'),
+                'course_shortname' => new external_value(PARAM_TEXT, 'Course short name'),
+                'user_id' => new external_value(PARAM_INT, 'User ID'),
+                'firstname' => new external_value(PARAM_TEXT, 'User first name'),
+                'lastname' => new external_value(PARAM_TEXT, 'User last name'),
+                'email' => new external_value(PARAM_TEXT, 'User email'),
+                'company_name' => new external_value(PARAM_TEXT, 'Company name'),
+                'final_grade' => new external_value(PARAM_FLOAT, 'Final grade'),
+                'pretest_score' => new external_value(PARAM_FLOAT, 'Pre-test score'),
+                'posttest_score' => new external_value(PARAM_FLOAT, 'Post-test score'),
+                'completion_date' => new external_value(PARAM_INT, 'Course completion date'),
+                'is_completed' => new external_value(PARAM_INT, 'Is course completed'),
+                'questionnaire_available' => new external_value(PARAM_INT, 'Questionnaire available (1) or not (0)'),
+                'score_materi' => new external_value(PARAM_FLOAT, 'Average score of questions 1-3 (Material)'),
+                'score_trainer' => new external_value(PARAM_FLOAT, 'Average score of questions 4-6 (Trainer)'),
+                'score_tempat' => new external_value(PARAM_FLOAT, 'Average score of questions 7-9 (Venue)'),
+                'score_total' => new external_value(PARAM_FLOAT, 'Overall average score')
+            ])
+        );
     }
 
 }
