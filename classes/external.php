@@ -570,6 +570,9 @@ class local_hris_external extends external_api {
     public static function get_all_course_results_parameters() {
         return new external_function_parameters([
             'apikey' => new external_value(PARAM_TEXT, 'API key for authentication'),
+            'courseid' => new external_value(PARAM_INT, 'Course ID', VALUE_OPTIONAL, 0),
+            'userid' => new external_value(PARAM_INT, 'User ID', VALUE_OPTIONAL, 0),
+            'company_name' => new external_value(PARAM_TEXT, 'Company name', VALUE_OPTIONAL, ''),
             'format' => new external_value(PARAM_TEXT, 'Response format', VALUE_DEFAULT, 'json')
         ]);
     }
@@ -577,14 +580,20 @@ class local_hris_external extends external_api {
     /**
      * Public endpoint: Get aggregated questionnaire scores for all courses
      * @param string $apikey API key
+     * @param int $courseid Course ID (0 for all courses)
+     * @param int $userid User ID (0 for all users)
+     * @param string $company_name Company name filter (empty for all)
      * @param string $format Response format (json)
      * @return array Aggregated results
      */
-    public static function get_all_course_results($apikey, $format = 'json') {
+    public static function get_all_course_results($apikey, $courseid = 0, $userid = 0, $company_name = '', $format = 'json') {
         global $DB;
 
         $params = self::validate_parameters(self::get_all_course_results_parameters(), [
             'apikey' => $apikey,
+            'courseid' => $courseid,
+            'userid' => $userid,
+            'company_name' => $company_name,
             'format' => $format
         ]);
 
@@ -595,7 +604,7 @@ class local_hris_external extends external_api {
         $context = context_system::instance();
         self::validate_context($context);
 
-        // Get all enrollments with grades and completion data (same as get_course_results but without filters)
+        // Get all enrollments with grades and completion data with optional filters
         $sql = "SELECT DISTINCT u.id as user_id, u.email, u.firstname, u.lastname,
                        COALESCE(uid.data, '') as company_name,
                        c.id as course_id, c.shortname, c.fullname as course_name,
@@ -613,10 +622,28 @@ class local_hris_external extends external_api {
                 WHERE u.deleted = 0 
                 AND u.confirmed = 1
                 AND c.id != :siteid
-                AND c.visible = 1
-                ORDER BY c.fullname, u.lastname, u.firstname";
+                AND c.visible = 1";
 
-        $records = $DB->get_records_sql($sql, ['siteid' => SITEID]);
+        $sqlparams = ['siteid' => SITEID];
+
+        if ($params['courseid'] > 0) {
+            $sql .= " AND c.id = :courseid";
+            $sqlparams['courseid'] = $params['courseid'];
+        }
+
+        if ($params['userid'] > 0) {
+            $sql .= " AND u.id = :userid";
+            $sqlparams['userid'] = $params['userid'];
+        }
+
+        if (!empty($params['company_name'])) {
+            $sql .= " AND uid.data = :company_name";
+            $sqlparams['company_name'] = $params['company_name'];
+        }
+
+        $sql .= " ORDER BY c.fullname, u.lastname, u.firstname";
+
+        $records = $DB->get_records_sql($sql, $sqlparams);
 
         $result = [];
         foreach ($records as $r) {
