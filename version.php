@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component    = 'local_hris';
-$plugin->release      = '1.3.1';
-$plugin->version      = 2026020102;
+$plugin->release      = '1.3.2';
+$plugin->version      = 2026020301;
 $plugin->requires     = 2024100700;
 $plugin->supported    = [405, 501];
 $plugin->maturity     = MATURITY_STABLE;
