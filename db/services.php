@@ -35,6 +35,15 @@ $functions = [
         'ajax'        => true,
         'capabilities' => '',
     ],
+    'local_hris_get_all_active_courses' => [
+        'classname'   => 'local_hris_external',
+        'methodname'  => 'get_active_courses',
+        'classpath'   => 'local/hris/classes/external.php',
+        'description' => 'Get list of active courses (alias)',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => '',
+    ],
     'local_hris_get_course_participants' => [
         'classname'   => 'local_hris_external',
         'methodname'  => 'get_course_participants', 
@@ -69,6 +78,7 @@ $services = [
     'HRIS Integration Service' => [
         'functions' => [
             'local_hris_get_active_courses',
+            'local_hris_get_all_active_courses',
             'local_hris_get_course_participants',
             'local_hris_get_course_results',
             'local_hris_get_all_course_results'
