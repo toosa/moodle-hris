@@ -608,7 +608,7 @@ php ../../admin/cli/upgrade.php --non-interactive
    - `local_hris_get_active_courses`
    - `local_hris_get_course_participants` 
    - `local_hris_get_course_results`
-  - `local_hris_get_all_course_results`
+    - `local_hris_get_all_course_results`
 
 ### 5. Create Web Service User & Token
 1. Create a dedicated user for API access
@@ -825,6 +825,141 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
   "message": "Access control exception"
 }
 ```
+
+## 🧩 Contoh Integrasi CodeIgniter 3 (CI3)
+
+Berikut contoh sederhana aplikasi CI3 untuk mengakses API HRIS Moodle.
+
+### 1. Konfigurasi
+Tambahkan konfigurasi di `application/config/hris.php`:
+
+```php
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+$config['hris_base_url'] = 'https://yourmoodle.com/webservice/rest/server.php';
+$config['hris_ws_token'] = 'YOUR_WS_TOKEN';
+$config['hris_api_key'] = 'YOUR_API_KEY';
+$config['hris_format'] = 'json';
+```
+
+### 2. Library Client Sederhana
+Buat `application/libraries/Hris_client.php`:
+
+```php
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+class Hris_client {
+
+  protected $CI;
+  protected $base_url;
+  protected $token;
+  protected $api_key;
+  protected $format;
+
+  public function __construct() {
+    $this->CI =& get_instance();
+    $this->CI->load->config('hris');
+    $this->CI->load->library('curl');
+
+    $this->base_url = $this->CI->config->item('hris_base_url');
+    $this->token = $this->CI->config->item('hris_ws_token');
+    $this->api_key = $this->CI->config->item('hris_api_key');
+    $this->format = $this->CI->config->item('hris_format');
+  }
+
+  protected function call_api($function, $params = []) {
+    $payload = array_merge([
+      'wstoken' => $this->token,
+      'wsfunction' => $function,
+      'moodlewsrestformat' => $this->format,
+      'apikey' => $this->api_key,
+    ], $params);
+
+    $response = $this->CI->curl->simple_post($this->base_url, $payload);
+    return json_decode($response, true);
+  }
+
+  public function get_active_courses() {
+    return $this->call_api('local_hris_get_active_courses');
+  }
+
+  public function get_course_participants($courseid = 0) {
+    return $this->call_api('local_hris_get_course_participants', [
+      'courseid' => (int)$courseid
+    ]);
+  }
+
+  public function get_course_results($courseid = 0, $userid = 0) {
+    return $this->call_api('local_hris_get_course_results', [
+      'courseid' => (int)$courseid,
+      'userid' => (int)$userid
+    ]);
+  }
+
+  public function get_all_course_results($courseid = 0) {
+    return $this->call_api('local_hris_get_all_course_results', [
+      'courseid' => (int)$courseid
+    ]);
+  }
+}
+```
+
+### 3. Controller Contoh
+Buat `application/controllers/Hris_demo.php`:
+
+```php
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+class Hris_demo extends CI_Controller {
+
+  public function __construct() {
+    parent::__construct();
+    $this->load->library('Hris_client');
+  }
+
+  public function courses() {
+    $data = $this->hris_client->get_active_courses();
+    $this->output
+      ->set_content_type('application/json')
+      ->set_output(json_encode($data));
+  }
+
+  public function participants($courseid = 0) {
+    $data = $this->hris_client->get_course_participants($courseid);
+    $this->output
+      ->set_content_type('application/json')
+      ->set_output(json_encode($data));
+  }
+
+  public function results($courseid = 0, $userid = 0) {
+    $data = $this->hris_client->get_course_results($courseid, $userid);
+    $this->output
+      ->set_content_type('application/json')
+      ->set_output(json_encode($data));
+  }
+
+  public function all_results($courseid = 0) {
+    $data = $this->hris_client->get_all_course_results($courseid);
+    $this->output
+      ->set_content_type('application/json')
+      ->set_output(json_encode($data));
+  }
+}
+```
+
+### 4. Contoh Akses Endpoint CI3
+
+```
+GET /index.php/hris_demo/courses
+GET /index.php/hris_demo/participants/5
+GET /index.php/hris_demo/results/5/123
+GET /index.php/hris_demo/all_results/0
+```
+
+> Catatan: Contoh di atas memakai library `curl` bawaan CI3. Jika belum tersedia, aktifkan atau tambahkan library cURL sesuai standar CI3.
 
 ## 🧪 Testing
 
