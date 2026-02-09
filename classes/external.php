@@ -374,7 +374,7 @@ class local_hris_external extends external_api {
      * If Rate question has exactly 9 choices and responses exist:
      *   - score_materi = average of choices 1-3
      *   - score_trainer = average of choices 4-6
-     *   - score_tempat = average of choices 7-9
+    *   - score_fasilitas = average of choices 7-9
      *   - score_total = average of all 9 choices
      *   - questionnaire_available = 1
      *
@@ -389,7 +389,7 @@ class local_hris_external extends external_api {
      *
      * @param int $userid User ID
      * @param int $courseid Course ID
-     * @return array Array with questionnaire_available, score_materi, score_trainer, score_tempat, score_total
+    * @return array Array with questionnaire_available, score_materi, score_trainer, score_fasilitas, score_total
      */
     private static function get_questionnaire_scores($userid, $courseid) {
         global $DB;
@@ -399,7 +399,7 @@ class local_hris_external extends external_api {
             'questionnaire_available' => 0,
             'score_materi' => 0.00,
             'score_trainer' => 0.00,
-            'score_tempat' => 0.00,
+            'score_fasilitas' => 0.00,
             'score_total' => 0.00
         ];
 
@@ -482,7 +482,7 @@ class local_hris_external extends external_api {
                     'questionnaire_available' => $has_score ? 1 : 0,
                     'score_materi' => 0.00,
                     'score_trainer' => 0.00,
-                    'score_tempat' => 0.00,
+                    'score_fasilitas' => 0.00,
                     'score_total' => $score_total
                 ];
             }
@@ -497,16 +497,16 @@ class local_hris_external extends external_api {
                     ($response_values[3] + $response_values[4] + $response_values[5]) / 3,
                     2
                 );
-                $score_tempat = round(
+                $score_fasilitas = round(
                     ($response_values[6] + $response_values[7] + $response_values[8]) / 3,
                     2
                 );
-                $has_score = ($score_materi > 0 || $score_trainer > 0 || $score_tempat > 0 || $score_total > 0);
+                $has_score = ($score_materi > 0 || $score_trainer > 0 || $score_fasilitas > 0 || $score_total > 0);
                 return [
                     'questionnaire_available' => $has_score ? 1 : 0,
                     'score_materi' => $score_materi,
                     'score_trainer' => $score_trainer,
-                    'score_tempat' => $score_tempat,
+                    'score_fasilitas' => $score_fasilitas,
                     'score_total' => $score_total
                 ];
             }
@@ -517,7 +517,7 @@ class local_hris_external extends external_api {
                 'questionnaire_available' => $has_score ? 1 : 0,
                 'score_materi' => 0.00,
                 'score_trainer' => 0.00,
-                'score_tempat' => 0.00,
+                'score_fasilitas' => 0.00,
                 'score_total' => $score_total
             ];
 
@@ -631,7 +631,7 @@ class local_hris_external extends external_api {
                 'questionnaire_available' => (int)$questionnaire_data['questionnaire_available'],
                 'score_materi' => (float)$questionnaire_data['score_materi'],
                 'score_trainer' => (float)$questionnaire_data['score_trainer'],
-                'score_tempat' => (float)$questionnaire_data['score_tempat'],
+                'score_fasilitas' => (float)$questionnaire_data['score_fasilitas'],
                 'score_total' => (float)$questionnaire_data['score_total']
             ];
         }
@@ -662,7 +662,7 @@ class local_hris_external extends external_api {
                 'questionnaire_available' => new external_value(PARAM_INT, 'Questionnaire available (1) or not (0)'),
                 'score_materi' => new external_value(PARAM_FLOAT, 'Average score of questions 1-3 (Material)'),
                 'score_trainer' => new external_value(PARAM_FLOAT, 'Average score of questions 4-6 (Trainer)'),
-                'score_tempat' => new external_value(PARAM_FLOAT, 'Average score of questions 7-9 (Venue)'),
+                'score_fasilitas' => new external_value(PARAM_FLOAT, 'Average score of questions 7-9 (Venue)'),
                 'score_total' => new external_value(PARAM_FLOAT, 'Overall average score')
             ])
         );

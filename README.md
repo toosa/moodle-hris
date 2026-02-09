@@ -411,7 +411,7 @@ Aggregated learning results including questionnaire scores per user and course.
 - `questionnaire_available`: 1 if questionnaire scores available, otherwise 0
 - `score_materi`: Average score of questions 1–3 (Material)
 - `score_trainer`: Average score of questions 4–6 (Trainer)
-- `score_tempat`: Average score of questions 7–9 (Venue)
+- `score_fasilitas`: Average score of questions 7–9 (Venue)
 - `score_total`: Overall average score (all choices)
 
 ### Database Schema Reference
@@ -559,13 +559,13 @@ Questionnaire scores are included only in `local_hris_get_all_course_results`.
   - When the Rate question has exactly 9 choices:
     - `score_materi` = average of choices 1–3
     - `score_trainer` = average of choices 4–6
-    - `score_tempat` = average of choices 7–9
+    - `score_fasilitas` = average of choices 7–9
     - `score_total` = average of all 9 choices
     - `questionnaire_available` = 1
   - When the Rate question has a different number of choices:
     - `score_total` = average of all choices
     - `questionnaire_available` = 1 if `score_total` > 0 else 0
-    - `score_materi`, `score_trainer`, `score_tempat` = 0
+    - `score_materi`, `score_trainer`, `score_fasilitas` = 0
 - If questionnaire or responses are missing: all scores = 0 and `questionnaire_available` = 0
 
 ## 🛠️ Installation
@@ -802,7 +802,7 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "questionnaire_available": 1,
     "score_materi": 4.33,
     "score_trainer": 4.67,
-    "score_tempat": 4.00,
+    "score_fasilitas": 4.00,
     "score_total": 4.33
   }
 ]
