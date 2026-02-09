@@ -61,7 +61,9 @@ A comprehensive web service plugin for Moodle that provides REST API endpoints f
 │  │  • get_active_courses()                  │    │
 │  │  • get_course_participants()             │    │
 │  │  • get_course_results()                  │    │
+│  │  • get_all_course_results()              │    │
 │  │  • get_quiz_score() [private]            │    │
+│  │  • get_questionnaire_scores() [private]  │    │
 │  └───────────────┬──────────────────────────┘    │
 │                  │                                │
 │  ┌───────────────▼──────────────────────────┐    │
@@ -312,7 +314,7 @@ Layer 5: Parameter Validation
 - **Secure API Access**: API key-based authentication for secure data access
 - **Active Course Listing**: Get all visible/active courses with details
 - **Participant Management**: Retrieve enrolled participants by course or globally
-- **Learning Results**: Comprehensive learning outcomes with pre-test and post-test scores
+- **Learning Results**: Comprehensive learning outcomes with pre-test, post-test, and questionnaire scores
 - **Multi-language Support**: English and Indonesian language packs included
 - **REST API Compatible**: Standard Moodle web service architecture
 
@@ -325,6 +327,7 @@ Layer 5: Parameter Validation
 | `local_hris_get_active_courses` | Read | apikey | Get all visible courses |
 | `local_hris_get_course_participants` | Read | apikey, courseid | Get enrolled participants |
 | `local_hris_get_course_results` | Read | apikey, courseid, userid | Get learning results with scores |
+| `local_hris_get_all_course_results` | Read | apikey, courseid | Get results with questionnaire scores |
 
 ### 1. Get Active Courses
 **Function**: `local_hris_get_active_courses`
@@ -378,10 +381,38 @@ Comprehensive learning results with assessment scores.
 - `course_shortname`: Course short name
 - `course_name`: Course full name
 - `final_grade`: Overall course grade
-- `pretest_score`: Pre-test quiz score (detects quiz names containing "pre" and "test")
-- `posttest_score`: Post-test quiz score (detects quiz names containing "post" and "test")
+- `pretest_score`: Pre-test quiz score (custom field `jenis_quiz` value = 2)
+- `posttest_score`: Post-test quiz score (custom field `jenis_quiz` value = 3)
 - `completion_date`: Course completion timestamp (0 if not completed)
 - `is_completed`: Completion status (1 = completed, 0 = not completed)
+
+### 4. Get All Course Results (with Questionnaire Scores)
+**Function**: `local_hris_get_all_course_results`
+
+Aggregated learning results including questionnaire scores per user and course.
+
+**Parameters**:
+- `courseid` (optional): Specific course ID (0 for all courses)
+
+**Response Fields**:
+- `course_id`: Course ID
+- `course_name`: Course full name
+- `course_shortname`: Course short name
+- `user_id`: User ID
+- `firstname`: User first name
+- `lastname`: User last name
+- `email`: User email address
+- `company_name`: Branch/organization name (from custom field `branch`)
+- `final_grade`: Overall course grade
+- `pretest_score`: Pre-test quiz score (custom field `jenis_quiz` value = 2)
+- `posttest_score`: Post-test quiz score (custom field `jenis_quiz` value = 3)
+- `completion_date`: Course completion timestamp (0 if not completed)
+- `is_completed`: Completion status (1 = completed, 0 = not completed)
+- `questionnaire_available`: 1 if questionnaire scores available, otherwise 0
+- `score_materi`: Average score of questions 1–3 (Material)
+- `score_trainer`: Average score of questions 4–6 (Trainer)
+- `score_tempat`: Average score of questions 7–9 (Venue)
+- `score_total`: Overall average score (all choices)
 
 ### Database Schema Reference
 
@@ -430,6 +461,17 @@ Comprehensive learning results with assessment scores.
 ├── fieldid
 └── data (field value)
 
+-- Course Modules
+{course_modules}
+├── id
+├── course
+├── module
+└── instance
+
+{modules}
+├── id
+└── name
+
 -- Course Module Custom Fields
 {customfield_data}
 ├── instanceid (course_modules.id)
@@ -453,17 +495,31 @@ Comprehensive learning results with assessment scores.
 ├── itemid
 └── finalgrade
 
--- Quiz Attempts
-{quiz}
+-- Questionnaire
+{questionnaire}
 ├── id
-├── course
-└── name (for pre/post test detection)
+└── name
 
-{quiz_attempts}
-├── userid
-├── quiz
-├── sumgrades
-└── state
+{questionnaire_question}
+├── id
+├── surveyid
+└── type_id
+
+{questionnaire_quest_choice}
+├── id
+└── question_id
+
+{questionnaire_response}
+├── id
+├── questionnaireid
+└── userid
+
+{questionnaire_response_rank}
+├── id
+├── response_id
+├── question_id
+├── choice_id
+└── rankvalue
 ```
 
 ### Query Logic Explanation
@@ -492,6 +548,25 @@ JOIN {customfield_data} cfd ON cfd.instanceid = cm.id AND cfd.value = '2'
 -- Post-test: Custom field value = 3
 JOIN {customfield_data} cfd ON cfd.instanceid = cm.id AND cfd.value = '3'
 ```
+
+#### Questionnaire Score Calculation
+Questionnaire scores are included only in `local_hris_get_all_course_results`.
+
+**Logic Summary**:
+- Looks for a visible questionnaire module in the course.
+- Finds the first Rate question (type_id = 8).
+- If responses exist:
+  - When the Rate question has exactly 9 choices:
+    - `score_materi` = average of choices 1–3
+    - `score_trainer` = average of choices 4–6
+    - `score_tempat` = average of choices 7–9
+    - `score_total` = average of all 9 choices
+    - `questionnaire_available` = 1
+  - When the Rate question has a different number of choices:
+    - `score_total` = average of all choices
+    - `questionnaire_available` = 1 if `score_total` > 0 else 0
+    - `score_materi`, `score_trainer`, `score_tempat` = 0
+- If questionnaire or responses are missing: all scores = 0 and `questionnaire_available` = 0
 
 ## 🛠️ Installation
 
@@ -533,6 +608,7 @@ php ../../admin/cli/upgrade.php --non-interactive
    - `local_hris_get_active_courses`
    - `local_hris_get_course_participants` 
    - `local_hris_get_course_results`
+  - `local_hris_get_all_course_results`
 
 ### 5. Create Web Service User & Token
 1. Create a dedicated user for API access
@@ -573,6 +649,11 @@ No additional parameters required.
 |-----------|------|----------|---------|-------------|
 | `courseid` | int | No | 0 | Specific course ID (0 = all courses) |
 | `userid` | int | No | 0 | Specific user ID (0 = all users) |
+
+#### get_all_course_results
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `courseid` | int | No | 0 | Specific course ID (0 = all courses) |
 
 ### Authentication
 All API calls require:
@@ -624,6 +705,17 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
   -d "apikey=YOUR_API_KEY" \
   -d "courseid=5" \
   -d "userid=123"
+```
+
+#### Example 5: Get All Course Results (with Questionnaire Scores)
+```bash
+curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "wstoken=YOUR_WS_TOKEN" \
+  -d "wsfunction=local_hris_get_all_course_results" \
+  -d "moodlewsrestformat=json" \
+  -d "apikey=YOUR_API_KEY" \
+  -d "courseid=0"
 ```
 
 ### Sample Response
@@ -686,6 +778,32 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "posttest_score": 90.0,
     "completion_date": 1706659200,
     "is_completed": 1
+  }
+]
+```
+
+#### Success Response - Get All Course Results
+```json
+[
+  {
+    "course_id": 5,
+    "course_name": "Introduction to Programming",
+    "course_shortname": "course101",
+    "user_id": 45,
+    "firstname": "John",
+    "lastname": "Doe",
+    "email": "john.doe@company.com",
+    "company_name": "Tech Corp",
+    "final_grade": 85.5,
+    "pretest_score": 65.0,
+    "posttest_score": 90.0,
+    "completion_date": 1706659200,
+    "is_completed": 1,
+    "questionnaire_available": 1,
+    "score_materi": 4.33,
+    "score_trainer": 4.67,
+    "score_tempat": 4.00,
+    "score_total": 4.33
   }
 ]
 ```
@@ -776,9 +894,11 @@ Expected: Only participants from course ID 5
 - [ ] Can retrieve active courses
 - [ ] Can retrieve course participants
 - [ ] Can retrieve course results with scores
+- [ ] Can retrieve all course results with questionnaire scores
 - [ ] API key validation works
 - [ ] Error handling returns proper messages
 - [ ] Pre/post test detection works correctly
+- [ ] Questionnaire scores calculated correctly (when available)
 
 ## 📋 Requirements
 
@@ -1016,17 +1136,24 @@ For help and questions:
 
 #### Issue 4: Pre/Post Test Scores Show 0
 **Solution**:
-1. Ensure quiz names contain "pre"/"post" AND "test"
-2. Verify quizzes have been attempted and finished
-3. Check quiz attempts are in "finished" state
+1. Ensure custom field `jenis_quiz` exists on course modules
+2. Set `jenis_quiz` value to `2` (PreTest) or `3` (PostTest) on the quiz module
+3. Verify grades exist for the quiz (grade items/grades are present)
 4. Confirm quizzes are in the correct course
 
 #### Issue 5: Missing Company Name
 **Solution**:
-1. Create custom profile field with shortname "company"
+1. Create custom profile field with shortname "branch"
 2. Go to Site Administration → Users → User profile fields
-3. Add new field with shortname exactly: `company`
+3. Add new field with shortname exactly: `branch`
 4. Users need to fill in this field in their profile
+
+#### Issue 6: Questionnaire Scores Show 0
+**Solution**:
+1. Ensure a visible questionnaire module exists in the course
+2. Ensure the questionnaire has a Rate question (type_id = 8)
+3. Confirm users have submitted responses
+4. If expecting breakdown scores, ensure the Rate question has exactly 9 choices
 
 ## 🔄 Version History
 
