@@ -363,6 +363,7 @@ Mengembalikan daftar peserta yang terdaftar di kursus.
 | `course_id` | int | Course ID |
 | `course_shortname` | string | Nama pendek kursus |
 | `course_name` | string | Nama lengkap kursus |
+| `role_name` | string | Peran pengguna di kursus (misal: `student`, `teacher`, `editingteacher`) |
 | `enrollment_date` | int | Timestamp pendaftaran |
 
 ---
@@ -728,6 +729,7 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "course_id": 5,
     "course_shortname": "course101",
     "course_name": "Introduction to Programming",
+    "role_name": "student",
     "enrollment_date": 1704153600
   }
 ]

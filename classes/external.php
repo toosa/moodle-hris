@@ -153,7 +153,13 @@ class local_hris_external extends external_api {
                        u.id as user_id, u.email, u.firstname, u.lastname, 
                        COALESCE(uid.data, '') as company_name,
                        c.id as course_id, c.shortname, c.fullname as course_name,
-                       ue.timecreated as enrollment_date
+                       ue.timecreated as enrollment_date,
+                       COALESCE((SELECT GROUP_CONCAT(DISTINCT r.shortname ORDER BY r.sortorder SEPARATOR ', ')
+                                 FROM {role_assignments} ra2
+                                 JOIN {role} r ON r.id = ra2.roleid
+                                 JOIN {context} ctx ON ctx.id = ra2.contextid
+                                     AND ctx.contextlevel = 50 AND ctx.instanceid = c.id
+                                 WHERE ra2.userid = u.id), '') as role_name
                 FROM {user} u
                 JOIN {user_enrolments} ue ON u.id = ue.userid
                 JOIN {enrol} e ON ue.enrolid = e.id
@@ -187,6 +193,7 @@ class local_hris_external extends external_api {
                 'course_id' => $participant->course_id,
                 'course_shortname' => $participant->shortname,
                 'course_name' => $participant->course_name,
+                'role_name' => $participant->role_name ?: '',
                 'enrollment_date' => $participant->enrollment_date
             ];
         }
@@ -209,6 +216,7 @@ class local_hris_external extends external_api {
                 'course_id' => new external_value(PARAM_INT, 'Course ID'),
                 'course_shortname' => new external_value(PARAM_TEXT, 'Course short name'),
                 'course_name' => new external_value(PARAM_TEXT, 'Course name'),
+                'role_name' => new external_value(PARAM_TEXT, 'User role in course (e.g. student, teacher)'),
                 'enrollment_date' => new external_value(PARAM_INT, 'Enrollment date')
             ])
         );
