@@ -64,8 +64,10 @@ class local_hris_external extends external_api {
         self::validate_context($context);
 
         // Get active courses (exclude site course)
-        $sql = "SELECT c.id, c.shortname, c.fullname, c.summary, c.startdate, c.enddate, c.visible
-                FROM {course} c 
+        $sql = "SELECT c.id, c.shortname, c.fullname, c.summary, c.startdate, c.enddate, c.visible,
+                       cc.id as category_id, cc.name as category_name
+                FROM {course} c
+                JOIN {course_categories} cc ON cc.id = c.category
                 WHERE c.id != :siteid 
                 AND c.visible = 1
                 ORDER BY c.fullname";
@@ -81,7 +83,9 @@ class local_hris_external extends external_api {
                 'summary' => strip_tags($course->summary),
                 'startdate' => $course->startdate,
                 'enddate' => $course->enddate,
-                'visible' => $course->visible
+                'visible' => $course->visible,
+                'category_id' => $course->category_id,
+                'category_name' => $course->category_name
             ];
         }
 
@@ -101,7 +105,9 @@ class local_hris_external extends external_api {
                 'summary' => new external_value(PARAM_TEXT, 'Course summary'),
                 'startdate' => new external_value(PARAM_INT, 'Course start date'),
                 'enddate' => new external_value(PARAM_INT, 'Course end date'),
-                'visible' => new external_value(PARAM_INT, 'Course visibility')
+                'visible' => new external_value(PARAM_INT, 'Course visibility'),
+                'category_id' => new external_value(PARAM_INT, 'Category ID'),
+                'category_name' => new external_value(PARAM_TEXT, 'Category name')
             ])
         );
     }
@@ -254,7 +260,13 @@ class local_hris_external extends external_api {
                        COALESCE(uid.data, '') as company_name,
                        c.id as course_id, c.shortname, c.fullname as course_name,
                        cc.timecompleted,
-                       COALESCE(gg.finalgrade, 0) as final_grade
+                       COALESCE(gg.finalgrade, 0) as final_grade,
+                       COALESCE((SELECT GROUP_CONCAT(DISTINCT r.shortname ORDER BY r.sortorder SEPARATOR ', ')
+                                 FROM {role_assignments} ra2
+                                 JOIN {role} r ON r.id = ra2.roleid
+                                 JOIN {context} ctx ON ctx.id = ra2.contextid
+                                     AND ctx.contextlevel = 50 AND ctx.instanceid = c.id
+                                 WHERE ra2.userid = u.id), '') as role_name
                 FROM {user} u
                 JOIN {user_enrolments} ue ON u.id = ue.userid
                 JOIN {enrol} e ON ue.enrolid = e.id
@@ -300,6 +312,7 @@ class local_hris_external extends external_api {
                 'course_id' => $result->course_id,
                 'course_shortname' => $result->shortname,
                 'course_name' => $result->course_name,
+                'role_name' => $result->role_name ?: '',
                 'final_grade' => round($result->final_grade, 2),
                 'pretest_score' => $pretest_score,
                 'posttest_score' => $posttest_score,
@@ -326,6 +339,7 @@ class local_hris_external extends external_api {
                 'course_id' => new external_value(PARAM_INT, 'Course ID'),
                 'course_shortname' => new external_value(PARAM_TEXT, 'Course short name'),
                 'course_name' => new external_value(PARAM_TEXT, 'Course name'),
+                'role_name' => new external_value(PARAM_TEXT, 'User role in course (e.g. student, teacher)'),
                 'final_grade' => new external_value(PARAM_FLOAT, 'Final grade'),
                 'pretest_score' => new external_value(PARAM_FLOAT, 'Pre-test score'),
                 'posttest_score' => new external_value(PARAM_FLOAT, 'Post-test score'),
@@ -578,7 +592,13 @@ class local_hris_external extends external_api {
                        COALESCE(uid.data, '') as company_name,
                        c.id as course_id, c.shortname, c.fullname as course_name,
                        cc.timecompleted,
-                       COALESCE(gg.finalgrade, 0) as final_grade
+                       COALESCE(gg.finalgrade, 0) as final_grade,
+                       COALESCE((SELECT GROUP_CONCAT(DISTINCT r.shortname ORDER BY r.sortorder SEPARATOR ', ')
+                                 FROM {role_assignments} ra2
+                                 JOIN {role} r ON r.id = ra2.roleid
+                                 JOIN {context} ctx ON ctx.id = ra2.contextid
+                                     AND ctx.contextlevel = 50 AND ctx.instanceid = c.id
+                                 WHERE ra2.userid = u.id), '') as role_name
                 FROM {user} u
                 JOIN {user_enrolments} ue ON u.id = ue.userid
                 JOIN {enrol} e ON ue.enrolid = e.id
@@ -623,6 +643,7 @@ class local_hris_external extends external_api {
                 'lastname' => (string)$r->lastname,
                 'email' => (string)$r->email,
                 'company_name' => (string)($r->company_name ?: ''),
+                'role_name' => (string)($r->role_name ?: ''),
                 'final_grade' => (float)round($r->final_grade, 2),
                 'pretest_score' => (float)$pretest_score,
                 'posttest_score' => (float)$posttest_score,
@@ -654,6 +675,7 @@ class local_hris_external extends external_api {
                 'lastname' => new external_value(PARAM_TEXT, 'User last name'),
                 'email' => new external_value(PARAM_TEXT, 'User email'),
                 'company_name' => new external_value(PARAM_TEXT, 'Company name'),
+                'role_name' => new external_value(PARAM_TEXT, 'User role in course (e.g. student, teacher)'),
                 'final_grade' => new external_value(PARAM_FLOAT, 'Final grade'),
                 'pretest_score' => new external_value(PARAM_FLOAT, 'Pre-test score'),
                 'posttest_score' => new external_value(PARAM_FLOAT, 'Post-test score'),

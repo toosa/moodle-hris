@@ -334,6 +334,8 @@ Mengembalikan daftar semua kursus yang visible/aktif di sistem.
 | `startdate` | int | Timestamp mulai kursus |
 | `enddate` | int | Timestamp akhir kursus |
 | `visible` | int | Flag visibilitas kursus |
+| `category_id` | int | ID kategori kursus |
+| `category_name` | string | Nama kategori kursus |
 
 ---
 
@@ -390,6 +392,7 @@ Hasil belajar lengkap dengan skor pre-test dan post-test.
 | `course_id` | int | Course ID |
 | `course_shortname` | string | Nama pendek kursus |
 | `course_name` | string | Nama lengkap kursus |
+| `role_name` | string | Peran pengguna di kursus (misal: `student`, `teacher`, `editingteacher`) |
 | `final_grade` | float | Nilai akhir kursus |
 | `pretest_score` | float | Skor pre-test (custom field `jenis_quiz` = 2) |
 | `posttest_score` | float | Skor post-test (custom field `jenis_quiz` = 3) |
@@ -422,6 +425,7 @@ Hasil belajar agregat termasuk skor kuesioner per pengguna dan kursus.
 | `lastname` | string | Nama belakang |
 | `email` | string | Alamat email pengguna |
 | `company_name` | string | Nama cabang/organisasi (dari custom field `branch`) |
+| `role_name` | string | Peran pengguna di kursus (misal: `student`, `teacher`, `editingteacher`) |
 | `final_grade` | float | Nilai akhir kursus |
 | `pretest_score` | float | Skor pre-test (custom field `jenis_quiz` = 2) |
 | `posttest_score` | float | Skor post-test (custom field `jenis_quiz` = 3) |
@@ -694,7 +698,9 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "summary": "Learn basic programming concepts",
     "startdate": 1703980800,
     "enddate": 1706659200,
-    "visible": 1
+    "visible": 1,
+    "category_id": 3,
+    "category_name": "IT Training"
   },
   {
     "id": 3,
@@ -703,7 +709,9 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "summary": "Master HTML, CSS, and JavaScript",
     "startdate": 1704067200,
     "enddate": 1706745600,
-    "visible": 1
+    "visible": 1,
+    "category_id": 3,
+    "category_name": "IT Training"
   }
 ]
 ```
@@ -737,6 +745,7 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "course_id": 5,
     "course_shortname": "course101",
     "course_name": "Introduction to Programming",
+    "role_name": "student",
     "final_grade": 85.5,
     "pretest_score": 65.0,
     "posttest_score": 90.0,
@@ -758,6 +767,7 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "lastname": "Doe",
     "email": "john.doe@company.com",
     "company_name": "Tech Corp",
+    "role_name": "student",
     "final_grade": 85.5,
     "pretest_score": 65.0,
     "posttest_score": 90.0,
