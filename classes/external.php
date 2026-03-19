@@ -65,9 +65,12 @@ class local_hris_external extends external_api {
 
         // Get active courses (exclude site course)
         $sql = "SELECT c.id, c.shortname, c.fullname, c.summary, c.startdate, c.enddate, c.visible,
-                       cc.id as category_id, cc.name as category_name
+                       cc.id as category_id, cc.name as category_name,
+                       COALESCE(NULLIF(cfd_th.value, ''), 'internal') as training_host
                 FROM {course} c
                 JOIN {course_categories} cc ON cc.id = c.category
+                LEFT JOIN {customfield_field} cff_th ON cff_th.shortname = 'training_host'
+                LEFT JOIN {customfield_data} cfd_th ON cfd_th.instanceid = c.id AND cfd_th.fieldid = cff_th.id
                 WHERE c.id != :siteid 
                 AND c.visible = 1
                 ORDER BY c.fullname";
@@ -85,7 +88,8 @@ class local_hris_external extends external_api {
                 'enddate' => $course->enddate,
                 'visible' => $course->visible,
                 'category_id' => $course->category_id,
-                'category_name' => $course->category_name
+                'category_name' => $course->category_name,
+                'training_host' => $course->training_host
             ];
         }
 
@@ -107,7 +111,8 @@ class local_hris_external extends external_api {
                 'enddate' => new external_value(PARAM_INT, 'Course end date'),
                 'visible' => new external_value(PARAM_INT, 'Course visibility'),
                 'category_id' => new external_value(PARAM_INT, 'Category ID'),
-                'category_name' => new external_value(PARAM_TEXT, 'Category name')
+                'category_name' => new external_value(PARAM_TEXT, 'Category name'),
+                'training_host' => new external_value(PARAM_TEXT, 'Training host (internal or external)')
             ])
         );
     }
@@ -154,6 +159,7 @@ class local_hris_external extends external_api {
                        COALESCE(uid.data, '') as company_name,
                        c.id as course_id, c.shortname, c.fullname as course_name,
                        ue.timecreated as enrollment_date,
+                       COALESCE(NULLIF(cfd_th.value, ''), 'internal') as training_host,
                        COALESCE((SELECT GROUP_CONCAT(DISTINCT r.shortname ORDER BY r.sortorder SEPARATOR ', ')
                                  FROM {role_assignments} ra2
                                  JOIN {role} r ON r.id = ra2.roleid
@@ -166,6 +172,8 @@ class local_hris_external extends external_api {
                 JOIN {course} c ON e.courseid = c.id
                 LEFT JOIN {user_info_field} uif ON uif.shortname = 'branch'
                 LEFT JOIN {user_info_data} uid ON u.id = uid.userid AND uid.fieldid = uif.id
+                LEFT JOIN {customfield_field} cff_th ON cff_th.shortname = 'training_host'
+                LEFT JOIN {customfield_data} cfd_th ON cfd_th.instanceid = c.id AND cfd_th.fieldid = cff_th.id
                 WHERE u.deleted = 0 
                 AND u.confirmed = 1
                 AND c.id != :siteid
@@ -193,6 +201,7 @@ class local_hris_external extends external_api {
                 'course_id' => $participant->course_id,
                 'course_shortname' => $participant->shortname,
                 'course_name' => $participant->course_name,
+                'training_host' => $participant->training_host,
                 'role_name' => $participant->role_name ?: '',
                 'enrollment_date' => $participant->enrollment_date
             ];
@@ -216,6 +225,7 @@ class local_hris_external extends external_api {
                 'course_id' => new external_value(PARAM_INT, 'Course ID'),
                 'course_shortname' => new external_value(PARAM_TEXT, 'Course short name'),
                 'course_name' => new external_value(PARAM_TEXT, 'Course name'),
+                'training_host' => new external_value(PARAM_TEXT, 'Training host (internal or external)'),
                 'role_name' => new external_value(PARAM_TEXT, 'User role in course (e.g. student, teacher)'),
                 'enrollment_date' => new external_value(PARAM_INT, 'Enrollment date')
             ])
@@ -269,6 +279,7 @@ class local_hris_external extends external_api {
                        c.id as course_id, c.shortname, c.fullname as course_name,
                        cc.timecompleted,
                        COALESCE(gg.finalgrade, 0) as final_grade,
+                       COALESCE(NULLIF(cfd_th.value, ''), 'internal') as training_host,
                        COALESCE((SELECT GROUP_CONCAT(DISTINCT r.shortname ORDER BY r.sortorder SEPARATOR ', ')
                                  FROM {role_assignments} ra2
                                  JOIN {role} r ON r.id = ra2.roleid
@@ -284,6 +295,8 @@ class local_hris_external extends external_api {
                 LEFT JOIN {grade_grades} gg ON u.id = gg.userid AND gi.id = gg.itemid
                 LEFT JOIN {user_info_field} uif ON uif.shortname = 'branch'
                 LEFT JOIN {user_info_data} uid ON u.id = uid.userid AND uid.fieldid = uif.id
+                LEFT JOIN {customfield_field} cff_th ON cff_th.shortname = 'training_host'
+                LEFT JOIN {customfield_data} cfd_th ON cfd_th.instanceid = c.id AND cfd_th.fieldid = cff_th.id
                 WHERE u.deleted = 0 
                 AND u.confirmed = 1
                 AND c.id != :siteid
@@ -320,6 +333,7 @@ class local_hris_external extends external_api {
                 'course_id' => $result->course_id,
                 'course_shortname' => $result->shortname,
                 'course_name' => $result->course_name,
+                'training_host' => $result->training_host,
                 'role_name' => $result->role_name ?: '',
                 'final_grade' => round($result->final_grade, 2),
                 'pretest_score' => $pretest_score,
@@ -347,6 +361,7 @@ class local_hris_external extends external_api {
                 'course_id' => new external_value(PARAM_INT, 'Course ID'),
                 'course_shortname' => new external_value(PARAM_TEXT, 'Course short name'),
                 'course_name' => new external_value(PARAM_TEXT, 'Course name'),
+                'training_host' => new external_value(PARAM_TEXT, 'Training host (internal or external)'),
                 'role_name' => new external_value(PARAM_TEXT, 'User role in course (e.g. student, teacher)'),
                 'final_grade' => new external_value(PARAM_FLOAT, 'Final grade'),
                 'pretest_score' => new external_value(PARAM_FLOAT, 'Pre-test score'),
@@ -601,6 +616,7 @@ class local_hris_external extends external_api {
                        c.id as course_id, c.shortname, c.fullname as course_name,
                        cc.timecompleted,
                        COALESCE(gg.finalgrade, 0) as final_grade,
+                       COALESCE(NULLIF(cfd_th.value, ''), 'internal') as training_host,
                        COALESCE((SELECT GROUP_CONCAT(DISTINCT r.shortname ORDER BY r.sortorder SEPARATOR ', ')
                                  FROM {role_assignments} ra2
                                  JOIN {role} r ON r.id = ra2.roleid
@@ -616,6 +632,8 @@ class local_hris_external extends external_api {
                 LEFT JOIN {grade_grades} gg ON u.id = gg.userid AND gi.id = gg.itemid
                 LEFT JOIN {user_info_field} uif ON uif.shortname = 'branch'
                 LEFT JOIN {user_info_data} uid ON u.id = uid.userid AND uid.fieldid = uif.id
+                LEFT JOIN {customfield_field} cff_th ON cff_th.shortname = 'training_host'
+                LEFT JOIN {customfield_data} cfd_th ON cfd_th.instanceid = c.id AND cfd_th.fieldid = cff_th.id
                 WHERE u.deleted = 0 
                 AND u.confirmed = 1
                 AND c.id != :siteid
@@ -646,6 +664,7 @@ class local_hris_external extends external_api {
                 'course_id' => (int)$r->course_id,
                 'course_name' => (string)$r->course_name,
                 'course_shortname' => (string)$r->shortname,
+                'training_host' => (string)$r->training_host,
                 'user_id' => (int)$r->user_id,
                 'firstname' => (string)$r->firstname,
                 'lastname' => (string)$r->lastname,
@@ -678,6 +697,7 @@ class local_hris_external extends external_api {
                 'course_id' => new external_value(PARAM_INT, 'Course ID'),
                 'course_name' => new external_value(PARAM_TEXT, 'Course name'),
                 'course_shortname' => new external_value(PARAM_TEXT, 'Course short name'),
+                'training_host' => new external_value(PARAM_TEXT, 'Training host (internal or external)'),
                 'user_id' => new external_value(PARAM_INT, 'User ID'),
                 'firstname' => new external_value(PARAM_TEXT, 'User first name'),
                 'lastname' => new external_value(PARAM_TEXT, 'User last name'),
