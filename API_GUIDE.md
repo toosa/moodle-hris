@@ -336,6 +336,7 @@ Mengembalikan daftar semua kursus yang visible/aktif di sistem.
 | `visible` | int | Flag visibilitas kursus |
 | `category_id` | int | ID kategori kursus |
 | `category_name` | string | Nama kategori kursus |
+| `training_host` | string | Tipe penyelenggaraan pelatihan (`internal` atau `external`; default: `internal`) |
 
 ---
 
@@ -363,6 +364,7 @@ Mengembalikan daftar peserta yang terdaftar di kursus.
 | `course_id` | int | Course ID |
 | `course_shortname` | string | Nama pendek kursus |
 | `course_name` | string | Nama lengkap kursus |
+| `training_host` | string | Tipe penyelenggaraan pelatihan (`internal` atau `external`; default: `internal`) |
 | `role_name` | string | Peran pengguna di kursus (misal: `student`, `teacher`, `editingteacher`) |
 | `enrollment_date` | int | Timestamp pendaftaran |
 
@@ -393,6 +395,7 @@ Hasil belajar lengkap dengan skor pre-test dan post-test.
 | `course_id` | int | Course ID |
 | `course_shortname` | string | Nama pendek kursus |
 | `course_name` | string | Nama lengkap kursus |
+| `training_host` | string | Tipe penyelenggaraan pelatihan (`internal` atau `external`; default: `internal`) |
 | `role_name` | string | Peran pengguna di kursus (misal: `student`, `teacher`, `editingteacher`) |
 | `final_grade` | float | Nilai akhir kursus |
 | `pretest_score` | float | Skor pre-test (custom field `jenis_quiz` = 2) |
@@ -421,6 +424,7 @@ Hasil belajar agregat termasuk skor kuesioner per pengguna dan kursus.
 | `course_id` | int | Course ID |
 | `course_name` | string | Nama lengkap kursus |
 | `course_shortname` | string | Nama pendek kursus |
+| `training_host` | string | Tipe penyelenggaraan pelatihan (`internal` atau `external`; default: `internal`) |
 | `user_id` | int | User ID |
 | `firstname` | string | Nama depan |
 | `lastname` | string | Nama belakang |
@@ -498,8 +502,19 @@ Hasil belajar agregat termasuk skor kuesioner per pengguna dan kursus.
 ├── id
 └── name
 
+-- Course Custom Fields
+{customfield_field}
+├── id
+├── shortname (e.g., 'training_host')
+└── name
+
+{customfield_data} (for courses)
+├── instanceid (course.id)
+├── fieldid
+└── value (e.g., 'internal', 'external')
+
 -- Course Module Custom Fields
-{customfield_data}
+{customfield_data} (for course modules)
 ├── instanceid (course_modules.id)
 ├── fieldid
 └── value (1=Normal, 2=PreTest, 3=PostTest)
@@ -701,7 +716,8 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "enddate": 1706659200,
     "visible": 1,
     "category_id": 3,
-    "category_name": "IT Training"
+    "category_name": "IT Training",
+    "training_host": "internal"
   },
   {
     "id": 3,
@@ -712,7 +728,8 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "enddate": 1706745600,
     "visible": 1,
     "category_id": 3,
-    "category_name": "IT Training"
+    "category_name": "IT Training",
+    "training_host": "external"
   }
 ]
 ```
@@ -729,6 +746,7 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "course_id": 5,
     "course_shortname": "course101",
     "course_name": "Introduction to Programming",
+    "training_host": "internal",
     "role_name": "student",
     "enrollment_date": 1704153600
   }
@@ -747,6 +765,7 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "course_id": 5,
     "course_shortname": "course101",
     "course_name": "Introduction to Programming",
+    "training_host": "internal",
     "role_name": "student",
     "final_grade": 85.5,
     "pretest_score": 65.0,
@@ -764,6 +783,7 @@ curl -X POST "https://yourmoodle.com/webservice/rest/server.php" \
     "course_id": 5,
     "course_name": "Introduction to Programming",
     "course_shortname": "course101",
+    "training_host": "internal",
     "user_id": 45,
     "firstname": "John",
     "lastname": "Doe",
