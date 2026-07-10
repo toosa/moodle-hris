@@ -124,7 +124,7 @@ class local_hris_external extends external_api {
     public static function get_course_participants_parameters() {
         return new external_function_parameters([
             'apikey' => new external_value(PARAM_TEXT, 'API key for authentication'),
-            'courseid' => new external_value(PARAM_INT, 'Course ID', VALUE_OPTIONAL, 0)
+            'courseid' => new external_value(PARAM_INT, 'Course ID', VALUE_DEFAULT, 0)
         ]);
     }
 
@@ -142,6 +142,9 @@ class local_hris_external extends external_api {
             'apikey' => $apikey,
             'courseid' => $courseid
         ]);
+
+        // `courseid = 0` means return participants from all visible courses.
+        $courseid = isset($params['courseid']) ? (int)$params['courseid'] : 0;
 
         // Validate API key
         if (!self::validate_api_key($params['apikey'])) {
@@ -181,9 +184,9 @@ class local_hris_external extends external_api {
 
         $sqlparams = ['siteid' => SITEID];
 
-        if ($params['courseid'] > 0) {
+        if ($courseid > 0) {
             $sql .= " AND c.id = :courseid";
-            $sqlparams['courseid'] = $params['courseid'];
+            $sqlparams['courseid'] = $courseid;
         }
 
         $sql .= " ORDER BY c.fullname, u.lastname, u.firstname";
