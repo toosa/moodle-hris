@@ -195,9 +195,10 @@ class local_hris_external extends external_api {
 
         $result = [];
         foreach ($participants as $participant) {
+            $email = clean_param((string)$participant->email, PARAM_EMAIL);
             $result[] = [
                 'user_id' => $participant->user_id,
-                'email' => $participant->email,
+                'email' => $email ?: '',
                 'firstname' => $participant->firstname,
                 'lastname' => $participant->lastname,
                 'company_name' => $participant->company_name ?: '',
@@ -221,7 +222,7 @@ class local_hris_external extends external_api {
         return new external_multiple_structure(
             new external_single_structure([
                 'user_id' => new external_value(PARAM_INT, 'User ID'),
-                'email' => new external_value(PARAM_EMAIL, 'User email'),
+                'email' => new external_value(PARAM_TEXT, 'User email (empty when invalid in source data)'),
                 'firstname' => new external_value(PARAM_TEXT, 'User first name'),
                 'lastname' => new external_value(PARAM_TEXT, 'User last name'),
                 'company_name' => new external_value(PARAM_TEXT, 'Company name'),
